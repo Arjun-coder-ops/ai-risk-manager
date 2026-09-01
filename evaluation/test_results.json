@@ -1,0 +1,79 @@
+{
+  "model_version": "fraud-spike-v1",
+  "model_type": "gradient_boosting",
+  "test_set_size": 6750,
+  "test_positive_rate": 0.0618,
+  "test_date_range": [
+    "2026-05-16",
+    "2026-06-29"
+  ],
+  "roc_auc": 0.9825,
+  "pr_auc": 0.9555,
+  "review_tier": {
+    "tier_label": "REVIEW (>=) \u2014 flag for analyst",
+    "threshold": 0.05,
+    "precision": 0.7011,
+    "recall": 0.9448,
+    "f1": 0.8049,
+    "false_positive_rate": 0.0265,
+    "confusion_matrix": {
+      "tp": 394,
+      "fp": 168,
+      "tn": 6165,
+      "fn": 23
+    },
+    "cost": {
+      "assumptions": {
+        "manual_review_cost_inr": 150.0,
+        "merchant_friction_cost_inr": 300.0,
+        "undetected_fraud_loss_inr": 8000.0,
+        "false_positive_cost_per_event_inr": 450.0,
+        "false_negative_cost_per_event_inr": 8000.0,
+        "disclosure": "These are configurable illustrative assumptions for a prototype, not real Razorpay financial figures."
+      },
+      "confusion_matrix": {
+        "tp": 394,
+        "fp": 168,
+        "tn": 6165,
+        "fn": 23
+      },
+      "total_false_positive_cost_inr": 75600.0,
+      "total_false_negative_cost_inr": 184000.0,
+      "total_estimated_cost_inr": 259600.0
+    }
+  },
+  "high_tier": {
+    "tier_label": "HIGH (>=) \u2014 direct merchant alert",
+    "threshold": 0.48,
+    "precision": 0.9497,
+    "recall": 0.9065,
+    "f1": 0.9276,
+    "false_positive_rate": 0.0032,
+    "confusion_matrix": {
+      "tp": 378,
+      "fp": 20,
+      "tn": 6313,
+      "fn": 39
+    },
+    "cost": {
+      "assumptions": {
+        "manual_review_cost_inr": 150.0,
+        "merchant_friction_cost_inr": 300.0,
+        "undetected_fraud_loss_inr": 8000.0,
+        "false_positive_cost_per_event_inr": 450.0,
+        "false_negative_cost_per_event_inr": 8000.0,
+        "disclosure": "These are configurable illustrative assumptions for a prototype, not real Razorpay financial figures."
+      },
+      "confusion_matrix": {
+        "tp": 378,
+        "fp": 20,
+        "tn": 6313,
+        "fn": 39
+      },
+      "total_false_positive_cost_inr": 9000.0,
+      "total_false_negative_cost_inr": 312000.0,
+      "total_estimated_cost_inr": 321000.0
+    }
+  },
+  "note": "These are the actual measured results of running the trained model on the held-out test split (dates after the validation window, never used for training or threshold selection). Cost figures use the illustrative, configurable assumptions in cost_model.py, not real Razorpay financial data."
+}
