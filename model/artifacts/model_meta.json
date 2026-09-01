@@ -1,0 +1,43 @@
+{
+  "model_version": "fraud-spike-v1",
+  "model_type": "gradient_boosting",
+  "feature_columns": [
+    "txn_volume_zscore",
+    "failed_rate_delta",
+    "amount_zscore",
+    "amount_volatility_ratio",
+    "new_user_ratio_delta",
+    "device_diversity_ratio",
+    "region_spread_zscore",
+    "rolling_volume_trend"
+  ],
+  "review_threshold": 0.05,
+  "high_threshold": 0.48,
+  "model_comparison_val_pr_auc": {
+    "logistic_regression": 0.7904,
+    "random_forest": 0.9439,
+    "gradient_boosting": 0.9634
+  },
+  "review_threshold_val_metrics": {
+    "threshold": 0.05,
+    "total_cost": 139750.0,
+    "precision": 0.7281323877068558,
+    "recall": 0.9655172413793104,
+    "f1": 0.8301886792452831,
+    "tp": 308,
+    "fp": 115,
+    "fn": 11,
+    "tn": 4066
+  },
+  "high_threshold_val_metrics": {
+    "threshold": 0.48,
+    "precision": 0.956953642384106,
+    "recall": 0.9059561128526645,
+    "f1": 0.9307568438003221
+  },
+  "cost_assumptions": {
+    "manual_review_cost_inr": 150.0,
+    "merchant_friction_cost_inr": 300.0,
+    "undetected_fraud_loss_inr": 8000.0
+  }
+}
