@@ -1,6 +1,6 @@
 # Multi-stage build for AI Risk Manager application
 # Stage 1: Builder
-FROM python:3.10-slim as builder
+FROM python:3.10-slim AS builder
 
 WORKDIR /app
 
