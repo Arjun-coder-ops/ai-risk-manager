@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Risk Manager — Merchant Fraud-Spike Dashboard</title>
+<style>
+  :root{
+    --bg:#0B0E14;
+    --panel:#121826;
+    --panel-2:#171F30;
+    --border:#232C40;
+    --text:#E7EAF2;
+    --muted:#8B93A7;
+    --low:#33D68C;
+    --review:#F0A83A;
+    --high:#F1495C;
+    --accent:#5B8DEF;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    padding:20px 28px; border-bottom:1px solid var(--border);
+    display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px;
+  }
+  header h1{
+    font-size:16px; letter-spacing:0.06em; text-transform:uppercase; margin:0;
+    font-weight:700; color:var(--text);
+  }
+  header .sub{color:var(--muted); font-size:12.5px; font-family:var(--mono);}
+  .status-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--low); margin-right:6px;}
+  main{padding:24px 28px 60px; max-width:1280px; margin:0 auto;}
+  .grid{display:grid; grid-template-columns: 360px 1fr; gap:20px; align-items:start;}
+  @media (max-width: 880px){.grid{grid-template-columns:1fr;}}
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px 20px;
+  }
+  .panel + .panel{margin-top:20px;}
+  .panel h2{
+    font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);
+    margin:0 0 14px; font-weight:700;
+  }
+  label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; margin-top:14px;}
+  label:first-child{margin-top:0;}
+  select, input{
+    width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:9px 10px; border-radius:6px; font-family:var(--mono); font-size:13px;
+  }
+  button{
+    margin-top:18px; width:100%; background:var(--accent); color:#0B0E14; border:none;
+    padding:11px; border-radius:6px; font-weight:700; font-size:13px; cursor:pointer;
+    letter-spacing:0.02em;
+  }
+  button:hover{filter:brightness(1.08);}
+  button:disabled{opacity:0.5; cursor:not-allowed;}
+
+  .gauge-wrap{display:flex; flex-direction:column; align-items:center; padding:6px 0 4px;}
+  .gauge-score{font-family:var(--mono); font-size:44px; font-weight:700; margin-top:-58px;}
+  .gauge-level{font-size:12px; letter-spacing:0.12em; text-transform:uppercase; font-weight:700; margin-top:2px;}
+  .action-text{font-size:13px; color:var(--muted); text-align:center; margin-top:10px; line-height:1.5;}
+
+  .signal-row{
+    display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--border);
+  }
+  .signal-row:first-child{border-top:none;}
+  .signal-feat{font-family:var(--mono); font-size:11px; color:var(--accent); white-space:nowrap; padding-top:1px;}
+  .signal-desc{font-size:13px; color:var(--text); line-height:1.4;}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{
+    text-align:left; color:var(--muted); font-weight:600; font-size:10.5px;
+    text-transform:uppercase; letter-spacing:0.05em; padding:6px 8px; border-bottom:1px solid var(--border);
+  }
+  td{padding:7px 8px; border-bottom:1px solid var(--border); font-family:var(--mono); color:var(--text);}
+  tr:last-child td{border-bottom:none;}
+  .pill{
+    display:inline-block; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700;
+    letter-spacing:0.04em; font-family:var(--sans);
+  }
+  .pill-low{background:rgba(51,214,140,0.15); color:var(--low);}
+  .pill-review{background:rgba(240,168,58,0.15); color:var(--review);}
+  .pill-high{background:rgba(241,73,92,0.15); color:var(--high);}
+  .pill-error{background:rgba(139,147,167,0.15); color:var(--muted);}
+
+  .metrics-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+  @media (max-width: 700px){.metrics-grid{grid-template-columns:repeat(2,1fr);}}
+  .metric{background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:12px 14px;}
+  .metric .val{font-family:var(--mono); font-size:22px; font-weight:700;}
+  .metric .lbl{font-size:11px; color:var(--muted); margin-top:3px;}
+
+  .chart-wrap{width:100%; overflow-x:auto;}
+  canvas{display:block;}
+
+  .empty{color:var(--muted); font-size:13px; text-align:center; padding:24px 0;}
+  .disclosure{
+    font-size:11px; color:var(--muted); background:var(--panel-2); border:1px solid var(--border);
+    border-radius:6px; padding:8px 10px; margin-top:14px; line-height:1.5;
+  }
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width: 880px){.two-col{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="status-dot" id="apiDot"></span>AI Risk Manager — Fraud-Spike Detector</h1>
+  <div class="sub" id="apiStatus">connecting to backend…</div>
+</header>
+
+<main>
+  <div class="grid">
+    <!-- LEFT COLUMN: controls + current risk result -->
+    <div>
+      <div class="panel" id="portfolioPanel">
+        <h2>Portfolio Overview</h2>
+        
+        <!-- Mode Toggle -->
+        <div style="margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border);">
+          <label style="display: inline; margin-right: 20px;">
+            <input type="radio" name="portfolioMode" value="single" checked> Single Date
+          </label>
+          <label style="display: inline;">
+            <input type="radio" name="portfolioMode" value="range"> Date Range
+          </label>
+        </div>
+        
+        <!-- Single Date Controls -->
+        <div id="singleDateControls">
+          <label for="portfolioDate">Date</label>
+          <input type="date" id="portfolioDate" value="2026-05-31">
+          <button id="loadPortfolioBtn">Load Portfolio</button>
+        </div>
+        
+        <!-- Date Range Controls (hidden by default) -->
+        <div id="dateRangeControls" style="display: none;">
+          <label for="portfolioFromDate">From</label>
+          <input type="date" id="portfolioFromDate" value="2026-05-01">
+          <label for="portfolioToDate" style="margin-top: 14px;">To</label>
+          <input type="date" id="portfolioToDate" value="2026-05-31">
+          <button id="loadPortfolioRangeBtn" style="margin-top: 14px;">Analyze Range</button>
+        </div>
+        
+        <!-- Single Date Metrics (shown for single date mode) -->
+        <div id="portfolioMetrics" class="metrics-grid" style="display:none; margin-top: 14px;">
+           <div class="metric"><div class="val" id="portHigh" style="color:var(--high);">0</div><div class="lbl">HIGH Risk</div></div>
+           <div class="metric"><div class="val" id="portReview" style="color:var(--review);">0</div><div class="lbl">REVIEW</div></div>
+           <div class="metric"><div class="val" id="portLow" style="color:var(--low);">0</div><div class="lbl">LOW Risk</div></div>
+           <div class="metric"><div class="val" id="portTotal">0</div><div class="lbl">Total Monitored</div></div>
+        </div>
+        
+        <!-- Range Metrics (shown for date-range mode) -->
+        <div id="portfolioRangeMetrics" class="metrics-grid" style="display:none; margin-top: 14px;">
+           <div class="metric"><div class="val" id="portRangeDates">0</div><div class="lbl">Days Analyzed</div></div>
+           <div class="metric"><div class="val" id="portRangeHigh" style="color:var(--high);">0</div><div class="lbl">Total HIGH</div></div>
+           <div class="metric"><div class="val" id="portRangeReview" style="color:var(--review);">0</div><div class="lbl">Total REVIEW</div></div>
+           <div class="metric"><div class="val" id="portRangeMerchantDays">0</div><div class="lbl">Merchant-Days</div></div>
+        </div>
+        
+        <!-- Single Date Table (shown for single date mode) -->
+        <div id="portfolioTableWrap" style="display:none; margin-top: 14px; overflow-x:auto;">
+          <table>
+            <thead>
+              <tr><th>Merchant</th><th>Score</th><th>Level</th><th>Signal</th></tr>
+            </thead>
+            <tbody id="portfolioBody"></tbody>
+          </table>
+        </div>
+        
+        <!-- Date Range Timeline (shown for date-range mode) -->
+        <div id="portfolioTimelineWrap" style="display:none; margin-top: 14px; overflow-x:auto;">
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Monitored</th><th>HIGH</th><th>REVIEW</th><th>LOW</th><th>Top At-Risk</th></tr>
+            </thead>
+            <tbody id="portfolioTimelineBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Analyze Merchant-Day</h2>
+        <label for="merchantSelect">Merchant</label>
+        <select id="merchantSelect"></select>
+        <label for="dateSelect">Date</label>
+        <input type="date" id="dateSelect" value="2026-05-31">
+        <button id="analyzeBtn">Run Risk Analysis</button>
+      </div>
+
+      <div class="panel" id="resultPanel">
+        <h2>Risk Assessment</h2>
+        <div class="empty" id="resultEmpty">Run an analysis to see a merchant's risk status here.</div>
+        <div id="resultBody" style="display:none;">
+          <div class="gauge-wrap">
+            <svg id="gaugeSvg" width="220" height="130" viewBox="0 0 220 130"></svg>
+            <div class="gauge-score" id="gaugeScore">--</div>
+            <div class="gauge-level" id="gaugeLevel">--</div>
+          </div>
+          <div class="action-text" id="actionText"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="signalsPanel" style="display:none;">
+        <h2>Key Risk Signals (Evidence)</h2>
+        <div id="signalsBody"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: chart, evaluation metrics, audit trail -->
+    <div>
+      <div class="panel">
+        <h2>Transaction Volume &amp; Risk Score — Last 60 Days</h2>
+        <div class="chart-wrap"><canvas id="chart" width="860" height="220"></canvas></div>
+      </div>
+
+      <div class="panel">
+        <h2>Held-Out Test Evaluation (Actual Measured Results)</h2>
+        <div id="evalBody" class="empty">Loading evaluation report…</div>
+      </div>
+
+      <div class="panel">
+        <h2>Audit Trail — Recent Risk Decisions</h2>
+        <div id="auditBody" class="empty">No decisions logged yet.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API_BASE = "http://localhost:8000";
+
+const $ = (id) => document.getElementById(id);
+
+async function api(path, opts) {
+  const res = await fetch(API_BASE + path, opts);
+  return res.json();
+}
+
+function pillClass(level) {
+  if (level === "LOW") return "pill-low";
+  if (level === "REVIEW") return "pill-review";
+  if (level === "HIGH") return "pill-high";
+  return "pill-error";
+}
+
+function levelColor(level) {
+  if (level === "LOW") return "#33D68C";
+  if (level === "REVIEW") return "#F0A83A";
+  if (level === "HIGH") return "#F1495C";
+  return "#8B93A7";
+}
+
+// ---- health check ----
+async function checkHealth() {
+  try {
+    const h = await api("/health");
+    $("apiStatus").textContent = h.status === "ok" ? `model ${h.model_version} · connected` : "backend degraded";
+    $("apiDot").style.background = h.status === "ok" ? "#33D68C" : "#F1495C";
+  } catch (e) {
+    $("apiStatus").textContent = "backend unreachable — start backend/app.py on :8000";
+    $("apiDot").style.background = "#F1495C";
+  }
+}
+
+// ---- merchants dropdown ----
+async function loadMerchants() {
+  const data = await api("/api/risk/merchants");
+  const sel = $("merchantSelect");
+  sel.innerHTML = "";
+  (data.merchants || []).sort((a,b)=>a.merchant_id.localeCompare(b.merchant_id)).forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m.merchant_id;
+    opt.textContent = `${m.merchant_id} — ${m.archetype}, ${m.region} (${m.spike_days} flagged days)`;
+    sel.appendChild(opt);
+  });
+}
+
+// ---- gauge ----
+function drawGauge(score, level) {
+  const svg = $("gaugeSvg");
+  const cx = 110, cy = 110, r = 90;
+  const color = levelColor(level);
+  const pct = Math.max(0, Math.min(1, score));
+  const startAngle = Math.PI, endAngle = Math.PI - pct * Math.PI;
+
+  function arcPath(a0, a1, radius) {
+    const x0 = cx + radius * Math.cos(a0), y0 = cy - radius * Math.sin(a0);
+    const x1 = cx + radius * Math.cos(a1), y1 = cy - radius * Math.sin(a1);
+    const large = Math.abs(a1 - a0) > Math.PI ? 1 : 0;
+    return `M ${x0} ${y0} A ${radius} ${radius} 0 ${large} ${a1 < a0 ? 1 : 0} ${x1} ${y1}`;
+  }
+
+  svg.innerHTML = `
+    <path d="${arcPath(Math.PI, 0, r)}" fill="none" stroke="#232C40" stroke-width="14" stroke-linecap="round"/>
+    <path d="${arcPath(startAngle, endAngle, r)}" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>
+  `;
+}
+
+function impactEmoji(impact) {
+  if (!impact) return "";
+  const l = impact.toLowerCase();
+  if (l.includes("strongly increased")) return "🔴";
+  if (l.includes("increased"))          return "🟠";
+  if (l.includes("slightly increased")) return "🟡";
+  if (l.includes("strongly reduced"))   return "🟢";
+  if (l.includes("reduced"))            return "🟢";
+  return "⚪";
+}
+
+function renderSignals(signals) {
+  const body = $("signalsBody");
+  body.innerHTML = "";
+  (signals || []).forEach(s => {
+    const row = document.createElement("div");
+    row.className = "signal-row";
+    const hasShap = s.impact != null;
+    const featLabel = s.feature ? s.feature : "—";
+    const emoji = hasShap ? impactEmoji(s.impact) + " " : "";
+    const impactBadge = hasShap
+      ? `<div style="font-size:11px; color:var(--muted); margin-top:2px;">${s.impact}</div>`
+      : "";
+    row.innerHTML = `
+      <div class="signal-feat">${featLabel}</div>
+      <div class="signal-desc">
+        <div>${emoji}${s.description}</div>
+        ${impactBadge}
+      </div>`;
+    body.appendChild(row);
+  });
+  $("signalsPanel").style.display = "block";
+}
+
+// ---- analyze ----
+async function runAnalysis() {
+  const merchantId = $("merchantSelect").value;
+  const date = $("dateSelect").value;
+  if (!merchantId || !date) return;
+
+  $("analyzeBtn").disabled = true;
+  $("analyzeBtn").textContent = "Analyzing…";
+  try {
+    const result = await api("/api/risk/analyze", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({merchant_id: merchantId, date})
+    });
+
+    $("resultEmpty").style.display = "none";
+    $("resultBody").style.display = "block";
+
+    if (result.status === "ok") {
+      drawGauge(result.risk_score, result.risk_level);
+      $("gaugeScore").textContent = result.risk_score.toFixed(3);
+      $("gaugeScore").style.color = levelColor(result.risk_level);
+      $("gaugeLevel").textContent = result.risk_level;
+      $("gaugeLevel").style.color = levelColor(result.risk_level);
+      $("actionText").textContent = result.recommended_action;
+      renderSignals(result.signals);
+    } else {
+      drawGauge(0, "ERROR");
+      $("gaugeScore").textContent = "—";
+      $("gaugeLevel").textContent = result.status === "insufficient_evidence" ? "INSUFFICIENT DATA" : "ERROR";
+      $("gaugeLevel").style.color = "#8B93A7";
+      $("actionText").textContent = result.reason || "Unable to compute a risk assessment.";
+      $("signalsPanel").style.display = "none";
+    }
+
+    loadTimeseries(merchantId);
+    loadAudit();
+  } catch (e) {
+    $("resultEmpty").style.display = "block";
+    $("resultEmpty").textContent = "Could not reach the backend. Is backend/app.py running on :8000?";
+  } finally {
+    $("analyzeBtn").disabled = false;
+    $("analyzeBtn").textContent = "Run Risk Analysis";
+  }
+}
+
+// ---- chart: volume bars + risk-score line ----
+async function loadTimeseries(merchantId) {
+  const data = await api(`/api/risk/timeseries/${merchantId}`);
+  const points = data.points || [];
+  const canvas = $("chart");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height, padL = 40, padB = 24, padT = 10;
+  ctx.clearRect(0, 0, W, H);
+  if (points.length === 0) return;
+
+  const maxTxn = Math.max(...points.map(p => p.n_transactions), 1);
+  const plotW = W - padL - 10, plotH = H - padT - padB;
+  const barW = plotW / points.length;
+
+  // volume bars
+  points.forEach((p, i) => {
+    const x = padL + i * barW;
+    const barH = (p.n_transactions / maxTxn) * plotH;
+    ctx.fillStyle = "#1D2536";
+    ctx.fillRect(x, padT + plotH - barH, barW * 0.7, barH);
+  });
+
+  // risk score line (0-1 scaled to plot height), colored by actual label for ground truth reference
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = padL + i * barW + barW * 0.35;
+    const score = p.risk_score == null ? 0 : p.risk_score;
+    const y = padT + plotH - score * plotH;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = "#5B8DEF";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // dots colored by risk level, ring if actual label==1 (ground-truth spike day)
+  points.forEach((p, i) => {
+    const x = padL + i * barW + barW * 0.35;
+    const score = p.risk_score == null ? 0 : p.risk_score;
+    const y = padT + plotH - score * plotH;
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = levelColor(p.risk_level);
+    ctx.fill();
+    if (p.actual_label === 1) {
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.strokeStyle = "#F1495C";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  });
+
+  // axes
+  ctx.strokeStyle = "#232C40";
+  ctx.beginPath();
+  ctx.moveTo(padL, padT + plotH);
+  ctx.lineTo(W - 10, padT + plotH);
+  ctx.stroke();
+  ctx.fillStyle = "#8B93A7";
+  ctx.font = "10px monospace";
+  ctx.fillText("0", padL - 22, padT + plotH + 4);
+  ctx.fillText(String(maxTxn), padL - 30, padT + 8);
+  ctx.fillText("txns/day (bars)  ·  risk score (line, right-normalized)  ·  red ring = actual labeled spike day", padL, H - 6);
+}
+
+// ---- evaluation report ----
+async function loadEvaluation() {
+  try {
+    const ev = await api("/api/risk/evaluation");
+    if (ev.status === "error") {
+      $("evalBody").textContent = ev.reason;
+      return;
+    }
+    const h = ev.high_tier, r = ev.review_tier;
+    $("evalBody").innerHTML = `
+      <div class="metrics-grid">
+        <div class="metric"><div class="val">${ev.roc_auc}</div><div class="lbl">ROC-AUC (test)</div></div>
+        <div class="metric"><div class="val">${ev.pr_auc}</div><div class="lbl">PR-AUC (test)</div></div>
+        <div class="metric"><div class="val">${h.precision}</div><div class="lbl">HIGH-tier precision</div></div>
+        <div class="metric"><div class="val">${h.recall}</div><div class="lbl">HIGH-tier recall</div></div>
+      </div>
+      <div class="two-col" style="margin-top:14px;">
+        <div>
+          <div style="font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em;">HIGH tier (t≥${h.threshold})</div>
+          <table>
+            <tr><td>TP</td><td>${h.confusion_matrix.tp}</td><td>FP</td><td>${h.confusion_matrix.fp}</td></tr>
+            <tr><td>FN</td><td>${h.confusion_matrix.fn}</td><td>TN</td><td>${h.confusion_matrix.tn}</td></tr>
+          </table>
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em;">REVIEW tier (t≥${r.threshold})</div>
+          <table>
+            <tr><td>TP</td><td>${r.confusion_matrix.tp}</td><td>FP</td><td>${r.confusion_matrix.fp}</td></tr>
+            <tr><td>FN</td><td>${r.confusion_matrix.fn}</td><td>TN</td><td>${r.confusion_matrix.tn}</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="disclosure">
+        Test set: ${ev.test_set_size} merchant-days, ${ev.test_date_range[0]} → ${ev.test_date_range[1]}, never used in training or threshold selection.
+        Estimated cost at HIGH tier: ₹${h.cost.total_estimated_cost_inr.toLocaleString('en-IN')}
+        (FP ₹${h.cost.total_false_positive_cost_inr.toLocaleString('en-IN')} + FN ₹${h.cost.total_false_negative_cost_inr.toLocaleString('en-IN')}).
+        ${ev.note}
+      </div>
+    `;
+  } catch (e) {
+    $("evalBody").textContent = "Could not load evaluation report.";
+  }
+}
+
+// ---- audit trail ----
+async function loadAudit() {
+  const data = await api("/api/risk/audit?limit=15");
+  const records = data.records || [];
+  if (records.length === 0) {
+    $("auditBody").innerHTML = `<div class="empty">No decisions logged yet.</div>`;
+    return;
+  }
+  let rows = records.map(r => `
+    <tr>
+      <td>${r.timestamp.slice(0,19).replace('T',' ')}</td>
+      <td>${r.merchant_id}</td>
+      <td>${r.date}</td>
+      <td>${r.risk_score != null ? r.risk_score.toFixed(3) : '—'}</td>
+      <td><span class="pill ${pillClass(r.risk_level || r.status)}">${r.risk_level || r.status}</span></td>
+      <td>${r.model_version || '—'}</td>
+    </tr>`).join("");
+  $("auditBody").innerHTML = `
+    <table>
+      <thead><tr><th>Timestamp (UTC)</th><th>Merchant</th><th>Date</th><th>Score</th><th>Level</th><th>Model</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ---- portfolio ----
+async function loadPortfolio() {
+  const date = $("portfolioDate").value;
+  if (!date) return;
+  
+  $("loadPortfolioBtn").disabled = true;
+  $("loadPortfolioBtn").textContent = "Loading...";
+  
+  try {
+    const res = await api(`/api/risk/portfolio?date=${date}`);
+    if (res.status === "ok") {
+      renderPortfolio(res.merchants);
+    } else {
+      alert("Error: " + res.reason);
+    }
+  } catch (e) {
+    alert("Could not reach backend.");
+  } finally {
+    $("loadPortfolioBtn").disabled = false;
+    $("loadPortfolioBtn").textContent = "Load Portfolio";
+  }
+}
+
+function renderPortfolio(merchants) {
+  let high = 0, review = 0, low = 0;
+  
+  const body = $("portfolioBody");
+  body.innerHTML = "";
+  
+  // Show only top 15 in the table to keep it manageable, but count all
+  let displayCount = 0;
+  
+  merchants.forEach(m => {
+    if (m.risk_level === "HIGH") high++;
+    else if (m.risk_level === "REVIEW") review++;
+    else if (m.risk_level === "LOW") low++;
+    
+    if (m.status !== "ok" || displayCount >= 15) return;
+    
+    const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    // Hover effect
+    tr.onmouseover = () => tr.style.backgroundColor = "rgba(255,255,255,0.05)";
+    tr.onmouseout = () => tr.style.backgroundColor = "transparent";
+    
+    tr.onclick = () => {
+      $("merchantSelect").value = m.merchant_id;
+      $("dateSelect").value = $("portfolioDate").value;
+      runAnalysis();
+      // Scroll to result
+      $("resultPanel").scrollIntoView({behavior: "smooth"});
+    };
+    
+    const signalText = m.signals && m.signals.length > 0 && m.signals[0].feature ? m.signals[0].feature : "—";
+    
+    tr.innerHTML = `
+      <td><strong>${m.merchant_id}</strong></td>
+      <td>${m.risk_score.toFixed(3)}</td>
+      <td><span class="pill ${pillClass(m.risk_level)}">${m.risk_level}</span></td>
+      <td style="font-size:11px;">${signalText}</td>
+    `;
+    body.appendChild(tr);
+    displayCount++;
+  });
+  
+  $("portHigh").textContent = high;
+  $("portReview").textContent = review;
+  $("portLow").textContent = low;
+  $("portTotal").textContent = merchants.length;
+  
+  $("portfolioMetrics").style.display = "grid";
+  $("portfolioTableWrap").style.display = "block";
+}
+
+// ---- portfolio date range ----
+async function loadPortfolioRange() {
+  const fromDate = $("portfolioFromDate").value;
+  const toDate = $("portfolioToDate").value;
+  if (!fromDate || !toDate) return;
+  
+  $("loadPortfolioRangeBtn").disabled = true;
+  $("loadPortfolioRangeBtn").textContent = "Loading...";
+  
+  try {
+    const res = await api(`/api/risk/portfolio?from_date=${fromDate}&to_date=${toDate}`);
+    if (res.status === "ok") {
+      renderPortfolioTimeline(res);
+    } else {
+      alert("Error: " + res.reason);
+    }
+  } catch (e) {
+    alert("Could not reach backend.");
+  } finally {
+    $("loadPortfolioRangeBtn").disabled = false;
+    $("loadPortfolioRangeBtn").textContent = "Analyze Range";
+  }
+}
+
+function renderPortfolioTimeline(data) {
+  const body = $("portfolioTimelineBody");
+  body.innerHTML = "";
+  
+  // Update summary metrics
+  if (data.summary) {
+    $("portRangeDates").textContent = data.summary.dates_scored;
+    $("portRangeHigh").textContent = data.summary.high_risk_total;
+    $("portRangeReview").textContent = data.summary.review_risk_total;
+    $("portRangeMerchantDays").textContent = data.summary.total_merchant_days;
+  }
+  
+  // Render each date as a row
+  (data.dates || []).forEach(dateData => {
+    const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.onmouseover = () => tr.style.backgroundColor = "rgba(255,255,255,0.05)";
+    tr.onmouseout = () => tr.style.backgroundColor = "transparent";
+    
+    // Clicking on a date row loads that date's detailed portfolio
+    tr.onclick = () => {
+      // Switch to single-date mode and load that date
+      document.querySelector('input[name="portfolioMode"][value="single"]').click();
+      $("portfolioDate").value = dateData.date;
+      loadPortfolio();
+    };
+    
+    // Get top merchant for this date
+    const topMerchant = (dateData.top_merchants && dateData.top_merchants.length > 0)
+      ? dateData.top_merchants[0]
+      : null;
+    const topMerchantText = topMerchant
+      ? `${topMerchant.merchant_id} (${topMerchant.risk_score.toFixed(3)})`
+      : "—";
+    
+    tr.innerHTML = `
+      <td>${dateData.date}</td>
+      <td>${dateData.total_monitored}</td>
+      <td style="color:var(--high); font-weight:bold;">${dateData.high_count}</td>
+      <td style="color:var(--review); font-weight:bold;">${dateData.review_count}</td>
+      <td style="color:var(--low);">${dateData.low_count}</td>
+      <td style="font-size:11px;">${topMerchantText}</td>
+    `;
+    body.appendChild(tr);
+  });
+  
+  $("portfolioRangeMetrics").style.display = "grid";
+  $("portfolioTimelineWrap").style.display = "block";
+}
+
+// ---- portfolio mode toggle ----
+document.querySelectorAll('input[name="portfolioMode"]').forEach(radio => {
+  radio.addEventListener("change", (e) => {
+    const mode = e.target.value;
+    if (mode === "single") {
+      $("singleDateControls").style.display = "block";
+      $("dateRangeControls").style.display = "none";
+      $("portfolioMetrics").style.display = "none";
+      $("portfolioTableWrap").style.display = "none";
+      $("portfolioRangeMetrics").style.display = "none";
+      $("portfolioTimelineWrap").style.display = "none";
+    } else {
+      $("singleDateControls").style.display = "none";
+      $("dateRangeControls").style.display = "block";
+      $("portfolioMetrics").style.display = "none";
+      $("portfolioTableWrap").style.display = "none";
+      $("portfolioRangeMetrics").style.display = "none";
+      $("portfolioTimelineWrap").style.display = "none";
+    }
+  });
+});
+
+// ---- init ----
+$("analyzeBtn").addEventListener("click", runAnalysis);
+$("loadPortfolioBtn").addEventListener("click", loadPortfolio);
+$("loadPortfolioRangeBtn").addEventListener("click", loadPortfolioRange);
+
+(async function init() {
+  await checkHealth();
+  await loadMerchants();
+  await loadEvaluation();
+  await loadAudit();
+})();
+</script>
+</body>
+</html>
