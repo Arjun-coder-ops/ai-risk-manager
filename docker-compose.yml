@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  ai-risk-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-risk-manager
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_APP=backend.app
+      - FLASK_ENV=production
+    volumes:
+      # Mount data directory for persistence (optional)
+      # - ./data:/app/data
+      # Mount logs for debugging (optional)
+      # - ./logs:/app/logs
+    networks:
+      - ai-risk-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    # Restart policy for production
+    restart: unless-stopped
+    # Resource limits (adjust as needed)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '1'
+    #       memory: 1G
+
+networks:
+  ai-risk-network:
+    driver: bridge
+
+# Optional: Add a volume for persistent storage
+# volumes:
+#   ai_risk_data:
+#     driver: local
