@@ -231,9 +231,45 @@
 </main>
 
 <script>
-const API_BASE = "https://ai-risk-manager-4048.onrender.com";
+// Set window.__AI_RISK_API_BASE before this script to target another allowed
+// API origin. The local default supports `python -m http.server 3000 -d frontend`.
+const API_BASE = window.__AI_RISK_API_BASE || "http://localhost:8000";
 
 const $ = (id) => document.getElementById(id);
+
+function clearNode(node) {
+  node.replaceChildren();
+}
+
+function addTextElement(parent, tag, text, className) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  element.textContent = text == null ? "" : String(text);
+  parent.appendChild(element);
+  return element;
+}
+
+function addCell(row, value, options = {}) {
+  const cell = document.createElement("td");
+  if (options.className) cell.className = options.className;
+  if (options.style) Object.assign(cell.style, options.style);
+  cell.textContent = value == null ? "—" : String(value);
+  row.appendChild(cell);
+  return cell;
+}
+
+function addPillCell(row, level) {
+  const cell = document.createElement("td");
+  const pill = document.createElement("span");
+  pill.className = `pill ${pillClass(level)}`;
+  pill.textContent = level || "—";
+  cell.appendChild(pill);
+  row.appendChild(cell);
+}
+
+function formatScore(value) {
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(3) : "—";
+}
 
 async function api(path, opts) {
   const res = await fetch(API_BASE + path, opts);
@@ -270,11 +306,11 @@ async function checkHealth() {
 async function loadMerchants() {
   const data = await api("/api/risk/merchants");
   const sel = $("merchantSelect");
-  sel.innerHTML = "";
+  clearNode(sel);
   (data.merchants || []).sort((a,b)=>a.merchant_id.localeCompare(b.merchant_id)).forEach(m => {
     const opt = document.createElement("option");
     opt.value = m.merchant_id;
-    opt.textContent = `${m.merchant_id} — ${m.archetype}, ${m.region} (${m.spike_days} flagged days)`;
+    opt.textContent = `${m.merchant_id} — ${m.archetype}, ${m.region} (${m.days} observed days)`;
     sel.appendChild(opt);
   });
 }
@@ -294,10 +330,19 @@ function drawGauge(score, level) {
     return `M ${x0} ${y0} A ${radius} ${radius} 0 ${large} ${a1 < a0 ? 1 : 0} ${x1} ${y1}`;
   }
 
-  svg.innerHTML = `
-    <path d="${arcPath(Math.PI, 0, r)}" fill="none" stroke="#232C40" stroke-width="14" stroke-linecap="round"/>
-    <path d="${arcPath(startAngle, endAngle, r)}" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>
-  `;
+  clearNode(svg);
+  [
+    [arcPath(Math.PI, 0, r), "#232C40"],
+    [arcPath(startAngle, endAngle, r), color],
+  ].forEach(([path, stroke]) => {
+    const element = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    element.setAttribute("d", path);
+    element.setAttribute("fill", "none");
+    element.setAttribute("stroke", stroke);
+    element.setAttribute("stroke-width", "14");
+    element.setAttribute("stroke-linecap", "round");
+    svg.appendChild(element);
+  });
 }
 
 function impactEmoji(impact) {
@@ -313,22 +358,20 @@ function impactEmoji(impact) {
 
 function renderSignals(signals) {
   const body = $("signalsBody");
-  body.innerHTML = "";
+  clearNode(body);
   (signals || []).forEach(s => {
     const row = document.createElement("div");
     row.className = "signal-row";
     const hasShap = s.impact != null;
     const featLabel = s.feature ? s.feature : "—";
     const emoji = hasShap ? impactEmoji(s.impact) + " " : "";
-    const impactBadge = hasShap
-      ? `<div style="font-size:11px; color:var(--muted); margin-top:2px;">${s.impact}</div>`
-      : "";
-    row.innerHTML = `
-      <div class="signal-feat">${featLabel}</div>
-      <div class="signal-desc">
-        <div>${emoji}${s.description}</div>
-        ${impactBadge}
-      </div>`;
+    addTextElement(row, "div", featLabel, "signal-feat");
+    const description = addTextElement(row, "div", "", "signal-desc");
+    addTextElement(description, "div", `${emoji}${s.description || ""}`);
+    if (hasShap) {
+      const impact = addTextElement(description, "div", s.impact);
+      Object.assign(impact.style, {fontSize: "11px", color: "var(--muted)", marginTop: "2px"});
+    }
     body.appendChild(row);
   });
   $("signalsPanel").style.display = "block";
@@ -402,7 +445,8 @@ async function loadTimeseries(merchantId) {
     ctx.fillRect(x, padT + plotH - barH, barW * 0.7, barH);
   });
 
-  // risk score line (0-1 scaled to plot height), colored by actual label for ground truth reference
+  // Risk-score line (0-1 scaled to plot height). Synthetic ground-truth
+  // labels are deliberately not sent to the production-facing dashboard.
   ctx.beginPath();
   points.forEach((p, i) => {
     const x = padL + i * barW + barW * 0.35;
@@ -414,7 +458,7 @@ async function loadTimeseries(merchantId) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // dots colored by risk level, ring if actual label==1 (ground-truth spike day)
+  // Dots are colored by the policy risk level.
   points.forEach((p, i) => {
     const x = padL + i * barW + barW * 0.35;
     const score = p.risk_score == null ? 0 : p.risk_score;
@@ -423,13 +467,6 @@ async function loadTimeseries(merchantId) {
     ctx.arc(x, y, 3, 0, Math.PI * 2);
     ctx.fillStyle = levelColor(p.risk_level);
     ctx.fill();
-    if (p.actual_label === 1) {
-      ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.strokeStyle = "#F1495C";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
   });
 
   // axes
@@ -442,7 +479,7 @@ async function loadTimeseries(merchantId) {
   ctx.font = "10px monospace";
   ctx.fillText("0", padL - 22, padT + plotH + 4);
   ctx.fillText(String(maxTxn), padL - 30, padT + 8);
-  ctx.fillText("txns/day (bars)  ·  risk score (line, right-normalized)  ·  red ring = actual labeled spike day", padL, H - 6);
+  ctx.fillText("txns/day (bars)  ·  risk score (line, right-normalized)", padL, H - 6);
 }
 
 // ---- evaluation report ----
@@ -454,36 +491,43 @@ async function loadEvaluation() {
       return;
     }
     const h = ev.high_tier, r = ev.review_tier;
-    $("evalBody").innerHTML = `
-      <div class="metrics-grid">
-        <div class="metric"><div class="val">${ev.roc_auc}</div><div class="lbl">ROC-AUC (test)</div></div>
-        <div class="metric"><div class="val">${ev.pr_auc}</div><div class="lbl">PR-AUC (test)</div></div>
-        <div class="metric"><div class="val">${h.precision}</div><div class="lbl">HIGH-tier precision</div></div>
-        <div class="metric"><div class="val">${h.recall}</div><div class="lbl">HIGH-tier recall</div></div>
-      </div>
-      <div class="two-col" style="margin-top:14px;">
-        <div>
-          <div style="font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em;">HIGH tier (t≥${h.threshold})</div>
-          <table>
-            <tr><td>TP</td><td>${h.confusion_matrix.tp}</td><td>FP</td><td>${h.confusion_matrix.fp}</td></tr>
-            <tr><td>FN</td><td>${h.confusion_matrix.fn}</td><td>TN</td><td>${h.confusion_matrix.tn}</td></tr>
-          </table>
-        </div>
-        <div>
-          <div style="font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em;">REVIEW tier (t≥${r.threshold})</div>
-          <table>
-            <tr><td>TP</td><td>${r.confusion_matrix.tp}</td><td>FP</td><td>${r.confusion_matrix.fp}</td></tr>
-            <tr><td>FN</td><td>${r.confusion_matrix.fn}</td><td>TN</td><td>${r.confusion_matrix.tn}</td></tr>
-          </table>
-        </div>
-      </div>
-      <div class="disclosure">
-        Test set: ${ev.test_set_size} merchant-days, ${ev.test_date_range[0]} → ${ev.test_date_range[1]}, never used in training or threshold selection.
-        Estimated cost at HIGH tier: ₹${h.cost.total_estimated_cost_inr.toLocaleString('en-IN')}
-        (FP ₹${h.cost.total_false_positive_cost_inr.toLocaleString('en-IN')} + FN ₹${h.cost.total_false_negative_cost_inr.toLocaleString('en-IN')}).
-        ${ev.note}
-      </div>
-    `;
+    const body = $("evalBody");
+    clearNode(body);
+    const metrics = document.createElement("div");
+    metrics.className = "metrics-grid";
+    [[ev.roc_auc, "ROC-AUC (test)"], [ev.pr_auc, "PR-AUC (test)"],
+     [h.precision, "HIGH-tier precision"], [h.recall, "HIGH-tier recall"]].forEach(([value, label]) => {
+      const metric = document.createElement("div");
+      metric.className = "metric";
+      addTextElement(metric, "div", value, "val");
+      addTextElement(metric, "div", label, "lbl");
+      metrics.appendChild(metric);
+    });
+    body.appendChild(metrics);
+    const tiers = document.createElement("div");
+    tiers.className = "two-col";
+    tiers.style.marginTop = "14px";
+    [["HIGH", h], ["REVIEW", r]].forEach(([name, tier]) => {
+      const column = document.createElement("div");
+      const title = addTextElement(column, "div", `${name} tier (t≥${tier.threshold})`);
+      Object.assign(title.style, {fontSize: "11px", color: "var(--muted)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".05em"});
+      const table = document.createElement("table");
+      [["TP", tier.confusion_matrix.tp, "FP", tier.confusion_matrix.fp], ["FN", tier.confusion_matrix.fn, "TN", tier.confusion_matrix.tn]].forEach(values => {
+        const row = document.createElement("tr");
+        values.forEach(value => addCell(row, value));
+        table.appendChild(row);
+      });
+      column.appendChild(table);
+      tiers.appendChild(column);
+    });
+    body.appendChild(tiers);
+    const highCost = h.cost;
+    const disclosure = addTextElement(
+      body,
+      "div",
+      `Test set: ${ev.test_set_size} merchant-days, ${ev.test_date_range[0]} → ${ev.test_date_range[1]}, never used in training or threshold selection. Estimated cost at HIGH tier: ₹${Number(highCost.total_estimated_cost_inr).toLocaleString('en-IN')} (FP ₹${Number(highCost.total_false_positive_cost_inr).toLocaleString('en-IN')} + FN ₹${Number(highCost.total_false_negative_cost_inr).toLocaleString('en-IN')}). ${ev.note || ""}`,
+      "disclosure"
+    );
   } catch (e) {
     $("evalBody").textContent = "Could not load evaluation report.";
   }
@@ -494,23 +538,32 @@ async function loadAudit() {
   const data = await api("/api/risk/audit?limit=15");
   const records = data.records || [];
   if (records.length === 0) {
-    $("auditBody").innerHTML = `<div class="empty">No decisions logged yet.</div>`;
+    clearNode($("auditBody"));
+    addTextElement($("auditBody"), "div", "No decisions logged yet.", "empty");
     return;
   }
-  let rows = records.map(r => `
-    <tr>
-      <td>${r.timestamp.slice(0,19).replace('T',' ')}</td>
-      <td>${r.merchant_id}</td>
-      <td>${r.date}</td>
-      <td>${r.risk_score != null ? r.risk_score.toFixed(3) : '—'}</td>
-      <td><span class="pill ${pillClass(r.risk_level || r.status)}">${r.risk_level || r.status}</span></td>
-      <td>${r.model_version || '—'}</td>
-    </tr>`).join("");
-  $("auditBody").innerHTML = `
-    <table>
-      <thead><tr><th>Timestamp (UTC)</th><th>Merchant</th><th>Date</th><th>Score</th><th>Level</th><th>Model</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+  const body = $("auditBody");
+  clearNode(body);
+  const table = document.createElement("table");
+  const head = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  ["Timestamp (UTC)", "Merchant", "Date", "Score", "Level", "Model"].forEach(label => addTextElement(headerRow, "th", label));
+  head.appendChild(headerRow);
+  table.appendChild(head);
+  const tableBody = document.createElement("tbody");
+  records.forEach(record => {
+    const row = document.createElement("tr");
+    const timestamp = String(record.timestamp || "").slice(0, 19).replace("T", " ");
+    addCell(row, timestamp);
+    addCell(row, record.merchant_id);
+    addCell(row, record.date);
+    addCell(row, formatScore(record.risk_score));
+    addPillCell(row, record.risk_level || record.status);
+    addCell(row, record.model_version);
+    tableBody.appendChild(row);
+  });
+  table.appendChild(tableBody);
+  body.appendChild(table);
 }
 
 // ---- portfolio ----
@@ -540,7 +593,7 @@ function renderPortfolio(merchants) {
   let high = 0, review = 0, low = 0;
   
   const body = $("portfolioBody");
-  body.innerHTML = "";
+  clearNode(body);
   
   // Show only top 15 in the table to keep it manageable, but count all
   let displayCount = 0;
@@ -568,12 +621,12 @@ function renderPortfolio(merchants) {
     
     const signalText = m.signals && m.signals.length > 0 && m.signals[0].feature ? m.signals[0].feature : "—";
     
-    tr.innerHTML = `
-      <td><strong>${m.merchant_id}</strong></td>
-      <td>${m.risk_score.toFixed(3)}</td>
-      <td><span class="pill ${pillClass(m.risk_level)}">${m.risk_level}</span></td>
-      <td style="font-size:11px;">${signalText}</td>
-    `;
+    const merchantCell = document.createElement("td");
+    addTextElement(merchantCell, "strong", m.merchant_id);
+    tr.appendChild(merchantCell);
+    addCell(tr, formatScore(m.risk_score));
+    addPillCell(tr, m.risk_level);
+    addCell(tr, signalText, {style: {fontSize: "11px"}});
     body.appendChild(tr);
     displayCount++;
   });
@@ -613,7 +666,7 @@ async function loadPortfolioRange() {
 
 function renderPortfolioTimeline(data) {
   const body = $("portfolioTimelineBody");
-  body.innerHTML = "";
+  clearNode(body);
   
   // Update summary metrics
   if (data.summary) {
@@ -643,17 +696,15 @@ function renderPortfolioTimeline(data) {
       ? dateData.top_merchants[0]
       : null;
     const topMerchantText = topMerchant
-      ? `${topMerchant.merchant_id} (${topMerchant.risk_score.toFixed(3)})`
+      ? `${topMerchant.merchant_id} (${formatScore(topMerchant.risk_score)})`
       : "—";
     
-    tr.innerHTML = `
-      <td>${dateData.date}</td>
-      <td>${dateData.total_monitored}</td>
-      <td style="color:var(--high); font-weight:bold;">${dateData.high_count}</td>
-      <td style="color:var(--review); font-weight:bold;">${dateData.review_count}</td>
-      <td style="color:var(--low);">${dateData.low_count}</td>
-      <td style="font-size:11px;">${topMerchantText}</td>
-    `;
+    addCell(tr, dateData.date);
+    addCell(tr, dateData.total_monitored);
+    addCell(tr, dateData.high_count, {style: {color: "var(--high)", fontWeight: "bold"}});
+    addCell(tr, dateData.review_count, {style: {color: "var(--review)", fontWeight: "bold"}});
+    addCell(tr, dateData.low_count, {style: {color: "var(--low)"}});
+    addCell(tr, topMerchantText, {style: {fontSize: "11px"}});
     body.appendChild(tr);
   });
   

@@ -44,6 +44,7 @@ import numpy as np
 import pandas as pd
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from validation import ObservationValidationError, validate_observations
 
 BASELINE_WINDOW = 14
 SHORT_WINDOW = 3
@@ -66,7 +67,13 @@ def _safe_div(a, b, default=0.0):
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.sort_values(["merchant_id", "date"]).copy()
+    """Build leakage-safe merchant-day features from validated observations.
+
+    The output always retains the canonical ``(merchant_id, date)`` key.
+    Calendar-time rolling windows avoid treating a missing calendar day as if
+    it were an observed day of merchant history.
+    """
+    df = validate_observations(df).sort_values(["merchant_id", "date"]).copy()
 
     df["failed_rate"] = df["n_failed"] / df["n_transactions"].replace(0, np.nan)
     df["failed_rate"] = df["failed_rate"].fillna(0.0)
@@ -75,11 +82,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df["device_per_user"] = df["n_devices"] / df["n_unique_users"].replace(0, np.nan)
     df["device_per_user"] = df["device_per_user"].fillna(1.0)
 
-    grouped = df.groupby("merchant_id", group_keys=False)
-
     def per_merchant(g: pd.DataFrame) -> pd.DataFrame:
         g = g.sort_values("date").copy()
-        g["history_days"] = np.arange(len(g))  # 0-indexed count of prior days available
+        g["_feature_date"] = pd.to_datetime(g["date"], format="%Y-%m-%d")
+        prior_observations = g.rolling(
+            f"{BASELINE_WINDOW}D", on="_feature_date", closed="left", min_periods=1
+        )["n_transactions"].count()
+        g["history_days"] = prior_observations.fillna(0).astype(int)
 
         for col, out_prefix in [
             ("n_transactions", "txn"),
@@ -89,9 +98,14 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
             ("new_user_ratio", "newuser"),
             ("distinct_regions_seen", "region"),
         ]:
-            shifted = g[col].shift(1)
-            roll_mean = shifted.rolling(BASELINE_WINDOW, min_periods=MIN_HISTORY_DAYS).mean()
-            roll_std = shifted.rolling(BASELINE_WINDOW, min_periods=MIN_HISTORY_DAYS).std()
+            rolling = g.rolling(
+                f"{BASELINE_WINDOW}D",
+                on="_feature_date",
+                closed="left",
+                min_periods=MIN_HISTORY_DAYS,
+            )[col]
+            roll_mean = rolling.mean()
+            roll_std = rolling.std()
             g[f"{out_prefix}_baseline_mean"] = roll_mean
             g[f"{out_prefix}_baseline_std"] = roll_std
 
@@ -127,17 +141,26 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         g["region_spread_zscore"] = g["region_spread_zscore"].fillna(0.0)
 
         # rolling short vs long volume trend
-        shifted_txn = g["n_transactions"].shift(1)
-        short_mean = shifted_txn.rolling(SHORT_WINDOW, min_periods=2).mean()
-        long_mean = shifted_txn.rolling(BASELINE_WINDOW, min_periods=MIN_HISTORY_DAYS).mean()
+        short_mean = g.rolling(
+            f"{SHORT_WINDOW}D", on="_feature_date", closed="left", min_periods=2
+        )["n_transactions"].mean()
+        long_mean = g.rolling(
+            f"{BASELINE_WINDOW}D",
+            on="_feature_date",
+            closed="left",
+            min_periods=MIN_HISTORY_DAYS,
+        )["n_transactions"].mean()
         g["rolling_volume_trend"] = (short_mean / long_mean.replace(0, np.nan)).fillna(1.0)
 
         g["has_sufficient_history"] = g["history_days"] >= MIN_HISTORY_DAYS
-        return g
+        return g.drop(columns=["_feature_date"])
 
-    df = grouped.apply(per_merchant, include_groups=False).reset_index(level=0)
-    if "merchant_id" not in df.columns:
-        df = df.rename(columns={"level_0": "merchant_id"})
+    # Avoid DataFrameGroupBy.apply: pandas' grouping-column behavior has
+    # changed across releases.  Explicit concatenation preserves the key.
+    feature_groups = [per_merchant(group) for _, group in df.groupby("merchant_id", sort=False)]
+    df = pd.concat(feature_groups, ignore_index=True)
+    if df.duplicated(["merchant_id", "date"]).any():
+        raise ObservationValidationError("Feature output contains duplicate merchant-day keys.")
 
     # clip extreme z-scores to keep the model robust to rare outliers
     for col in ["txn_volume_zscore", "amount_zscore", "region_spread_zscore"]:

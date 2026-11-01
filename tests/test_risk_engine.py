@@ -42,7 +42,7 @@ class TestFeatureEngineering:
         merchant_id = raw_df.merchant_id.iloc[0]
         sub = raw_df[raw_df.merchant_id == merchant_id].sort_values("date").reset_index(drop=True)
         cutoff_idx = 20
-        target_date = sub.loc[cutoff_idx, "date"]
+        target_date = sub.loc[cutoff_idx, "date"].strftime("%Y-%m-%d")
 
         full_features = build_features(sub)
         truncated_features = build_features(sub.iloc[: cutoff_idx + 1])

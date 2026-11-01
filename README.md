@@ -200,8 +200,8 @@ history returns:
   restate already-verified signals; it cannot independently accuse a
   merchant of fraud or add unverified claims, and it falls back to a
   deterministic template if unavailable — see `model/llm_explainer.py`.
-- CORS is enabled broadly for local demo convenience only; a real
-  deployment would scope this to the actual dashboard origin.
+- CORS is allowlisted through `ALLOWED_ORIGINS`; it is not a substitute for
+  authentication or tenant isolation, which remain future work.
 
 ## Running Locally
 
@@ -225,9 +225,39 @@ pytest tests/ -v
 cd backend
 python app.py
 
-# 5. Open the dashboard
-# In a browser, open frontend/index.html directly (it calls http://localhost:8000)
+# 5. Serve the dashboard from an allowed local origin
+# In a second terminal at the repository root:
+python -m http.server 3000 -d frontend
+# Open http://localhost:3000
 ```
+
+The API accepts browser requests only from the comma-separated origins in
+`ALLOWED_ORIGINS` (default: `http://localhost:3000,http://127.0.0.1:3000`).
+Set it explicitly when using another local frontend origin, for example:
+
+```bash
+ALLOWED_ORIGINS=http://localhost:3000 python backend/app.py
+```
+
+On PowerShell:
+
+```powershell
+$env:ALLOWED_ORIGINS = "http://localhost:3000"
+python backend/app.py
+```
+
+**CORS is not authentication or authorization.** This Flask application is
+currently a synthetic-data demonstration and must not be deployed with
+tenant or personal data until authentication, RBAC, and tenant isolation are
+implemented. The dashboard API deliberately omits simulator ground-truth
+labels; they remain available only to offline evaluation code.
+
+## Reproducibility
+
+`requirements.txt` installs the reviewed versions in `requirements.lock`.
+Use Python 3.10 and run the pipeline in a clean virtual environment. The
+baseline reproduction record, commands, artifact hashes, and measured output
+are documented in [`docs/baseline-evidence.md`](docs/baseline-evidence.md).
 
 ## Limitations
 
@@ -239,10 +269,10 @@ python app.py
 - Cost assumptions are illustrative placeholders, not calibrated to real
   Razorpay unit economics.
 - The dashboard is a static single-page app for demo purposes, not
-  production-hardened (no auth, broad CORS).
-- No SHAP/formal feature-attribution library is used; the explanation
-  layer ranks features by a simple normalized-deviation heuristic, which
-  is transparent but less rigorous than a proper attribution method.
+  production-hardened (no authentication, RBAC, or tenant isolation).
+- SHAP is used when the installed model/explainer combination supports it;
+  the engine uses a transparent heuristic fallback if it does not. SHAP
+  impact direction is distinct from the observed feature-value direction.
 
 ## Future Improvements
 

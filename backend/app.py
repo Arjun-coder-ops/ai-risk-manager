@@ -30,9 +30,16 @@ from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
+from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "model"))
 from risk_engine import RiskEngine, RiskEngineError, build_features  # noqa: E402
+from validation import (  # noqa: E402
+    ObservationValidationError,
+    normalize_date,
+    validate_observations,
+    validate_request_identifiers,
+)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, "data", "raw", "merchant_daily_transactions.csv")
@@ -40,7 +47,26 @@ AUDIT_LOG_PATH = os.path.join(BASE_DIR, "evaluation", "audit_log.jsonl")
 EVAL_RESULTS_PATH = os.path.join(BASE_DIR, "evaluation", "test_results.json")
 
 app = Flask(__name__)
-CORS(app)
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_REQUEST_BYTES", "65536"))
+
+# CORS controls which browser origins may read a response; it is not an
+# authentication or authorization mechanism.  This prototype serves only
+# synthetic demonstration data and must not be deployed with tenant data
+# before Milestone 2 adds authentication and organization isolation.
+ALLOWED_ORIGINS = tuple(
+    origin.strip()
+    for origin in os.environ.get(
+        "ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if origin.strip()
+)
+CORS(
+    app,
+    origins=ALLOWED_ORIGINS,
+    methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+    supports_credentials=False,
+)
 
 try:
     engine = RiskEngine()
@@ -58,7 +84,7 @@ def get_raw_data() -> pd.DataFrame:
     if _raw_cache is None:
         df = pd.read_csv(DATA_PATH, parse_dates=["date"])
         df["date"] = df["date"].dt.strftime("%Y-%m-%d")
-        _raw_cache = df
+        _raw_cache = validate_observations(df)
     return _raw_cache
 
 def get_featured_data(raw: pd.DataFrame) -> pd.DataFrame:
@@ -69,34 +95,46 @@ def get_featured_data(raw: pd.DataFrame) -> pd.DataFrame:
 
 def write_audit_record(record: dict):
     os.makedirs(os.path.dirname(AUDIT_LOG_PATH), exist_ok=True)
-    with open(AUDIT_LOG_PATH, "a") as f:
+    with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
+
+
+@app.errorhandler(BadRequest)
+def handle_bad_request(_: BadRequest):
+    return jsonify({"status": "error", "reason": "Malformed request."}), 400
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_request_too_large(_: RequestEntityTooLarge):
+    return jsonify({"status": "error", "reason": "Request body exceeds the allowed size."}), 413
 
 
 @app.route("/health", methods=["GET"])
 def health():
     if engine is None:
-        return jsonify({"status": "degraded", "reason": ENGINE_LOAD_ERROR}), 503
+        return jsonify({"status": "degraded"}), 503
     return jsonify({"status": "ok", "model_version": engine.model_version})
 
 
 @app.route("/api/risk/analyze", methods=["POST"])
 def analyze():
     if engine is None:
-        return jsonify({"status": "error", "reason": f"Risk engine unavailable: {ENGINE_LOAD_ERROR}"}), 503
+        return jsonify({"status": "error", "reason": "Risk engine unavailable."}), 503
 
     body = request.get_json(silent=True)
-    if not body:
-        return jsonify({"status": "error", "reason": "Request body must be valid JSON."}), 400
+    if body is None or not isinstance(body, dict):
+        return jsonify({"status": "error", "reason": "Request body must be a valid JSON object."}), 400
 
     merchant_id = body.get("merchant_id")
     date = body.get("date")
-    if not merchant_id or not date:
-        return jsonify({"status": "error", "reason": "merchant_id and date are required."}), 400
+    try:
+        merchant_id, date = validate_request_identifiers(merchant_id, date)
+    except ObservationValidationError as exc:
+        return jsonify({"status": "error", "reason": f"Invalid request: {exc}"}), 422
 
     try:
         raw = get_raw_data()
-    except FileNotFoundError:
+    except (FileNotFoundError, ObservationValidationError):
         return jsonify({"status": "error", "reason": "Transaction history data not found on server."}), 500
 
     result = engine.score_merchant_day(raw, date, merchant_id)
@@ -125,7 +163,7 @@ def analyze():
 @app.route("/api/risk/portfolio", methods=["GET"])
 def portfolio():
     if engine is None:
-        return jsonify({"status": "error", "reason": f"Risk engine unavailable: {ENGINE_LOAD_ERROR}"}), 503
+        return jsonify({"status": "error", "reason": "Risk engine unavailable."}), 503
 
     # Parse query parameters
     date = request.args.get("date")
@@ -152,14 +190,18 @@ def portfolio():
 def _portfolio_single_date(date: str):
     """Handle single-date portfolio query (unchanged from original)."""
     try:
+        date = normalize_date(date)
+    except ObservationValidationError as exc:
+        return jsonify({"status": "error", "reason": f"Invalid date: {exc}"}), 400
+    try:
         raw = get_raw_data()
     except FileNotFoundError:
         return jsonify({"status": "error", "reason": "Transaction history data not found on server."}), 500
 
     try:
         featured = get_featured_data(raw)
-    except Exception as e:
-        return jsonify({"status": "error", "reason": f"Feature computation failed: {e}"}), 500
+    except (ObservationValidationError, ValueError):
+        return jsonify({"status": "error", "reason": "Feature computation failed."}), 500
 
     raw_target = raw[raw["date"] == date]
     featured_target = featured[featured["date"] == date]
@@ -180,9 +222,11 @@ def _portfolio_daterange(from_date_str: str, to_date_str: str):
     """Handle date-range portfolio query (new feature)."""
     # Parse and validate dates
     try:
-        from_date = pd.to_datetime(from_date_str).date()
-        to_date = pd.to_datetime(to_date_str).date()
-    except Exception:
+        from_date_str = normalize_date(from_date_str)
+        to_date_str = normalize_date(to_date_str)
+        from_date = datetime.strptime(from_date_str, "%Y-%m-%d").date()
+        to_date = datetime.strptime(to_date_str, "%Y-%m-%d").date()
+    except ObservationValidationError:
         return jsonify({"status": "error", "reason": "Invalid date format. Use YYYY-MM-DD."}), 400
 
     # Validate range ordering
@@ -198,7 +242,7 @@ def _portfolio_daterange(from_date_str: str, to_date_str: str):
     try:
         raw = get_raw_data()
         featured = get_featured_data(raw)
-    except FileNotFoundError:
+    except (FileNotFoundError, ObservationValidationError, ValueError):
         return jsonify({"status": "error", "reason": "Transaction history data not found on server."}), 500
 
     # Generate date range
@@ -269,7 +313,12 @@ def _portfolio_daterange(from_date_str: str, to_date_str: str):
 
 @app.route("/api/risk/audit", methods=["GET"])
 def audit():
-    limit = int(request.args.get("limit", 50))
+    try:
+        limit = int(request.args.get("limit", 50))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "reason": "limit must be an integer between 1 and 100."}), 400
+    if not 1 <= limit <= 100:
+        return jsonify({"status": "error", "reason": "limit must be an integer between 1 and 100."}), 400
     if not os.path.exists(AUDIT_LOG_PATH):
         return jsonify({"records": []})
     with open(AUDIT_LOG_PATH) as f:
@@ -284,8 +333,7 @@ def merchants():
     raw = get_raw_data()
     summary = (
         raw.groupby("merchant_id")
-        .agg(archetype=("archetype", "first"), region=("home_region", "first"),
-             days=("date", "count"), spike_days=("label_fraud_spike", "sum"))
+        .agg(archetype=("archetype", "first"), region=("home_region", "first"), days=("date", "count"))
         .reset_index()
     )
     return jsonify({"merchants": summary.to_dict(orient="records")})
@@ -299,15 +347,17 @@ def timeseries(merchant_id):
         return jsonify({"status": "error", "reason": f"Unknown merchant {merchant_id}"}), 404
 
     if engine is None:
-        return jsonify({"status": "error", "reason": f"Risk engine unavailable: {ENGINE_LOAD_ERROR}"}), 503
+        return jsonify({"status": "error", "reason": "Risk engine unavailable."}), 503
 
     points = []
     for _, row in sub.tail(60).iterrows():
-        result = engine.score_merchant_day(raw, row["date"], merchant_id)
+        # The engine only needs this merchant's history; passing the complete
+        # portfolio would repeat schema validation and feature work for every
+        # other merchant on every chart point.
+        result = engine.score_merchant_day(sub, row["date"], merchant_id)
         points.append({
             "date": row["date"],
             "n_transactions": int(row["n_transactions"]),
-            "actual_label": int(row["label_fraud_spike"]),
             "status": result.status,
             "risk_score": result.risk_score,
             "risk_level": result.risk_level,

@@ -32,14 +32,15 @@ import pandas as pd
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from features import FEATURE_COLUMNS, build_features, MIN_HISTORY_DAYS
+from validation import (
+    ObservationValidationError,
+    normalize_date,
+    normalize_merchant_id,
+    validate_observations,
+)
 
 MODEL_PATH = os.path.join(REPO_ROOT, "model/artifacts/model.joblib")
 META_PATH = os.path.join(REPO_ROOT, "model/artifacts/model_meta.json")
-
-REQUIRED_INPUT_FIELDS = [
-    "merchant_id", "date", "n_transactions", "n_failed", "avg_amount",
-    "amount_std", "n_unique_users", "n_new_users", "n_devices", "distinct_regions_seen",
-]
 
 # Human-readable, non-technical descriptions of what each feature means,
 # used to turn a raw feature contribution into merchant-facing evidence.
@@ -108,31 +109,18 @@ class RiskEngine:
             # shap not installed, or model unsupported — heuristic fallback used.
             pass
 
-    def _validate_row(self, row: dict) -> Optional[str]:
-        missing = [f for f in REQUIRED_INPUT_FIELDS if f not in row or row[f] is None]
-        if missing:
-            return f"Missing required fields: {missing}"
-        try:
-            n_txn = float(row["n_transactions"])
-            n_failed = float(row["n_failed"])
-        except (TypeError, ValueError):
-            return "Non-numeric transaction counts."
-        if n_txn < 0 or n_failed < 0:
-            return "Transaction counts cannot be negative."
-        if n_failed > n_txn:
-            return "n_failed cannot exceed n_transactions."
-        if float(row.get("n_new_users", 0)) > float(row.get("n_unique_users", 0)):
-            return "n_new_users cannot exceed n_unique_users."
-        return None
-
     def score_merchant_day(self, history_df: pd.DataFrame, target_date: str, merchant_id: str) -> RiskResult:
         """
         history_df: raw merchant-day rows (same schema as generate_data.py output)
                     for this merchant, including the target date and enough
                     trailing history to compute rolling baselines.
         """
-        if history_df is None or len(history_df) == 0:
-            return RiskResult(status="error", reason="No transaction history provided.")
+        try:
+            history_df = validate_observations(history_df)
+            target_date = normalize_date(target_date)
+            merchant_id = normalize_merchant_id(merchant_id)
+        except ObservationValidationError as exc:
+            return RiskResult(status="error", reason=f"Invalid input: {exc}")
 
         merchant_hist = history_df[history_df["merchant_id"] == merchant_id].copy()
         if len(merchant_hist) == 0:
@@ -141,14 +129,6 @@ class RiskEngine:
         target_row = merchant_hist[merchant_hist["date"] == target_date]
         if len(target_row) == 0:
             return RiskResult(status="error", reason=f"No transaction row found for {merchant_id} on {target_date}.")
-
-        raw_target = target_row.iloc[0].to_dict()
-        validation_error = self._validate_row(raw_target)
-        if validation_error:
-            return RiskResult(
-                status="error", merchant_id=merchant_id, date=str(target_date),
-                reason=f"Invalid input: {validation_error}",
-            )
 
         try:
             featured = build_features(merchant_hist)
@@ -336,26 +316,68 @@ class RiskEngine:
         raw_target_day and featured_target_day must be filtered to target_date.
         Uses vectorized predict_proba for speed.
         """
-        if len(featured_target_day) == 0:
+        try:
+            target_date = normalize_date(target_date)
+        except ObservationValidationError as exc:
+            return [RiskResult(status="error", date=str(target_date), reason=f"Invalid input: {exc}")]
+
+        # Keep the established API behavior for dates outside the available
+        # data range. There is no malformed observation to validate here.
+        if raw_target_day.empty and featured_target_day.empty:
+            return []
+
+        try:
+            raw_target_day = validate_observations(raw_target_day)
+        except ObservationValidationError as exc:
+            return [RiskResult(status="error", date=str(target_date), reason=f"Invalid input: {exc}")]
+
+        feature_required = {"merchant_id", "date", "has_sufficient_history", *FEATURE_COLUMNS}
+        missing_feature_columns = sorted(feature_required - set(featured_target_day.columns))
+        if missing_feature_columns:
+            return [RiskResult(
+                status="error", date=str(target_date),
+                reason=f"Feature input is missing required fields: {missing_feature_columns}",
+            )]
+
+        features = featured_target_day.copy()
+        try:
+            features["merchant_id"] = features["merchant_id"].map(normalize_merchant_id)
+            features["date"] = features["date"].map(normalize_date)
+        except ObservationValidationError as exc:
+            return [RiskResult(status="error", date=str(target_date), reason=f"Invalid feature input: {exc}")]
+        if features.duplicated(["merchant_id", "date"]).any():
+            return [RiskResult(
+                status="error", date=str(target_date),
+                reason="Feature input contains duplicate merchant-day keys.",
+            )]
+        try:
+            values = features[FEATURE_COLUMNS].astype(float)
+            if not np.isfinite(values.to_numpy()).all():
+                raise ValueError("Feature values must be finite.")
+        except (TypeError, ValueError) as exc:
+            return [RiskResult(status="error", date=str(target_date), reason=f"Invalid feature input: {exc}")]
+
+        raw_target_day = raw_target_day[raw_target_day["date"] == target_date].copy()
+        features = features[features["date"] == target_date].copy()
+        if raw_target_day.empty:
             return []
 
         results = []
-        raw_rows = raw_target_day.to_dict(orient="records")
-        feat_rows = featured_target_day.to_dict(orient="records")
+        keyed_features = features.set_index(["merchant_id", "date"], drop=False)
         
         X_list = []
         valid_items = []
         
-        for raw_row, feat_row in zip(raw_rows, feat_rows):
+        for raw_row in raw_target_day.to_dict(orient="records"):
             merchant_id = raw_row["merchant_id"]
-                
-            validation_error = self._validate_row(raw_row)
-            if validation_error:
+            key = (merchant_id, target_date)
+            if key not in keyed_features.index:
                 results.append(RiskResult(
                     status="error", merchant_id=merchant_id, date=str(target_date),
-                    reason=f"Invalid input: {validation_error}"
+                    reason="No feature row found for this merchant-day key.",
                 ))
                 continue
+            feat_row = keyed_features.loc[key].to_dict()
                 
             if not bool(feat_row["has_sufficient_history"]):
                 results.append(RiskResult(
