@@ -259,6 +259,14 @@ Use Python 3.10 and run the pipeline in a clean virtual environment. The
 baseline reproduction record, commands, artifact hashes, and measured output
 are documented in [`docs/baseline-evidence.md`](docs/baseline-evidence.md).
 
+## Durable tenant API (Milestone 2A)
+
+The authenticated, PostgreSQL-ready API is documented in
+[`docs/tenant-data-foundation.md`](docs/tenant-data-foundation.md). It is
+separate from the legacy synthetic-demo endpoints, which must never receive
+tenant data. Copy `.env.example` to `.env`, replace its placeholders, and run
+`docker compose up --build` for local PostgreSQL-backed development.
+
 ## Limitations
 
 - Data is synthetic; real-world merchant behaviour is messier and this

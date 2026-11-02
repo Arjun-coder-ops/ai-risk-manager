@@ -38,6 +38,7 @@ COPY . .
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-# Run the Flask application
-# Expose on 0.0.0.0 to allow external connections in container
-CMD ["python", "-m", "flask", "--app", "backend.app", "run", "--host=0.0.0.0", "--port=8000"]
+# Apply schema migrations before starting the application. Production delivery
+# should run this as a dedicated one-off release job; this command keeps local
+# Docker Compose startup reproducible.
+CMD ["sh", "-c", "alembic upgrade head && exec python -m flask --app backend.app run --host=0.0.0.0 --port=8000"]

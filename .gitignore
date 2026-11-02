@@ -4,6 +4,7 @@ __pycache__/
 model/artifacts/*.joblib
 evaluation/audit_log.jsonl
 .env
+data/*.db
 *.egg-info/
 .DS_Store
 node_modules/

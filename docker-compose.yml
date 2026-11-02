@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_risk}
+      POSTGRES_USER: ${POSTGRES_USER:-ai_risk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ai-risk-network
+
   ai-risk-manager:
     build:
       context: .
@@ -10,6 +26,12 @@ services:
       - PYTHONUNBUFFERED=1
       - FLASK_APP=backend.app
       - FLASK_ENV=production
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-ai_risk}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_risk}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - ai-risk-network
     healthcheck:
@@ -37,6 +59,5 @@ networks:
     driver: bridge
 
 # Optional: Add a volume for persistent storage
-# volumes:
-#   ai_risk_data:
-#     driver: local
+volumes:
+  postgres_data:

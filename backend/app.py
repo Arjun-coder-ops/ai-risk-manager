@@ -31,6 +31,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
+from sqlalchemy.exc import SQLAlchemyError
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "model"))
 from risk_engine import RiskEngine, RiskEngineError, build_features  # noqa: E402
@@ -40,6 +41,7 @@ from validation import (  # noqa: E402
     validate_observations,
     validate_request_identifiers,
 )
+from backend.tenant_api import tenant_api
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, "data", "raw", "merchant_daily_transactions.csv")
@@ -64,9 +66,10 @@ CORS(
     app,
     origins=ALLOWED_ORIGINS,
     methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
     supports_credentials=False,
 )
+app.config["JWT_SECRET"] = os.environ.get("JWT_SECRET")
 
 try:
     engine = RiskEngine()
@@ -74,6 +77,10 @@ try:
 except RiskEngineError as e:
     engine = None
     ENGINE_LOAD_ERROR = str(e)
+
+# Authenticated, durable tenant APIs. Legacy /api/risk routes remain an
+# explicitly synthetic backwards-compatible demonstration surface.
+app.register_blueprint(tenant_api)
 
 _raw_cache = None
 _featured_cache = None
@@ -107,6 +114,11 @@ def handle_bad_request(_: BadRequest):
 @app.errorhandler(RequestEntityTooLarge)
 def handle_request_too_large(_: RequestEntityTooLarge):
     return jsonify({"status": "error", "reason": "Request body exceeds the allowed size."}), 413
+
+
+@app.errorhandler(SQLAlchemyError)
+def handle_database_error(_: SQLAlchemyError):
+    return jsonify({"status": "error", "reason": "A database operation could not be completed."}), 503
 
 
 @app.route("/health", methods=["GET"])
