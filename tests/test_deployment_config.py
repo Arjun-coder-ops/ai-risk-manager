@@ -29,3 +29,5 @@ def test_compose_defaults_bootstrap_registration_to_disabled():
 
     assert "ALLOW_BOOTSTRAP_REGISTRATION=${ALLOW_BOOTSTRAP_REGISTRATION:-false}" in compose
     assert "ALLOW_BOOTSTRAP_REGISTRATION=false" in env_example
+    assert "MAX_CSV_INGESTION_ROWS=${MAX_CSV_INGESTION_ROWS:-1000}" in compose
+    assert "MAX_CSV_INGESTION_ROWS=1000" in env_example

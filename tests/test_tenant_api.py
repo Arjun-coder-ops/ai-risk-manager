@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 from datetime import date, timedelta
+from io import BytesIO, StringIO
 import os
 import sys
 from types import SimpleNamespace
@@ -16,6 +18,7 @@ import app as application  # noqa: E402
 from backend.auth import issue_access_token  # noqa: E402
 from backend.database import configure_database, create_schema, get_session  # noqa: E402
 from backend.models import Membership, User  # noqa: E402
+from model.validation import REQUIRED_INPUT_FIELDS  # noqa: E402
 
 
 @pytest.fixture
@@ -80,6 +83,14 @@ def observations(merchant_id: str = "M0001", days: int = 8):
         "n_devices": 70,
         "distinct_regions_seen": 2,
     } for offset in range(days)]
+
+
+def csv_upload(rows: list[dict], filename: str = "merchant-days.csv") -> dict:
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=REQUIRED_INPUT_FIELDS)
+    writer.writeheader()
+    writer.writerows(rows)
+    return {"file": (BytesIO(output.getvalue().encode("utf-8")), filename)}
 
 
 class DeterministicRiskEngine:
@@ -200,6 +211,105 @@ class TestTenantAuthAndIngestion:
         foreign_merchants = client.get("/api/v1/merchants", headers=auth_headers(org_b_token))
         assert foreign_merchants.status_code == 200
         assert foreign_merchants.get_json()["merchants"] == []
+
+    def test_csv_ingestion_persists_valid_rows_and_reports_rejected_rows(self, client):
+        token = register(client, "csv-partial")["access_token"]
+        existing = client.post(
+            "/api/v1/ingestions/merchant-days",
+            json={"observations": observations("MEXIST", days=1)},
+            headers=auth_headers(token, "batch-csv-existing-0001"),
+        )
+        assert existing.status_code == 201
+
+        valid = observations("MCSVVALID", days=1)[0]
+        invalid = observations("MCSVBAD", days=1)[0]
+        invalid["n_failed"] = invalid["n_transactions"] + 1
+        duplicate_persisted = observations("MEXIST", days=1)[0]
+        headers = auth_headers(token, "batch-csv-partial-0001")
+        created = client.post(
+            "/api/v1/ingestions/merchant-days/csv",
+            data=csv_upload([valid, invalid, duplicate_persisted]),
+            content_type="multipart/form-data",
+            headers=headers,
+        )
+        assert created.status_code == 201, created.get_json()
+        batch = created.get_json()
+        assert batch["status"] == "PARTIAL"
+        assert batch["received_count"] == 3
+        assert batch["accepted_count"] == 1
+        assert batch["rejected_count"] == 2
+        assert batch["error_summary"]["source"] == "csv"
+        assert {item["line"] for item in batch["error_summary"]["reported_errors"]} == {3, 4}
+
+        fetched = client.get(f"/api/v1/ingestions/{batch['id']}", headers=auth_headers(token))
+        assert fetched.status_code == 200
+        assert fetched.get_json()["error_summary"] == batch["error_summary"]
+
+        replay = client.post(
+            "/api/v1/ingestions/merchant-days/csv",
+            data=csv_upload([valid, invalid, duplicate_persisted]),
+            content_type="multipart/form-data",
+            headers=headers,
+        )
+        assert replay.status_code == 200
+        assert replay.get_json()["id"] == batch["id"]
+        assert replay.get_json()["idempotent_replay"] is True
+
+        changed_payload = client.post(
+            "/api/v1/ingestions/merchant-days/csv",
+            data=csv_upload([valid]),
+            content_type="multipart/form-data",
+            headers=headers,
+        )
+        assert changed_payload.status_code == 409
+
+        merchants = client.get("/api/v1/merchants", headers=auth_headers(token))
+        assert [merchant["merchant_id"] for merchant in merchants.get_json()["merchants"]] == ["MCSVVALID", "MEXIST"]
+
+    def test_csv_ingestion_rejects_duplicate_rows_without_persisting_merchants(self, client):
+        token = register(client, "csv-duplicates")["access_token"]
+        row = observations("MCSVDUP", days=1)[0]
+        rejected = client.post(
+            "/api/v1/ingestions/merchant-days/csv",
+            data=csv_upload([row, row.copy()]),
+            content_type="multipart/form-data",
+            headers=auth_headers(token, "batch-csv-duplicates-0001"),
+        )
+        assert rejected.status_code == 201
+        batch = rejected.get_json()
+        assert batch["status"] == "REJECTED"
+        assert batch["accepted_count"] == 0
+        assert batch["rejected_count"] == 2
+        assert [error["line"] for error in batch["error_summary"]["reported_errors"]] == [2, 3]
+        merchants = client.get("/api/v1/merchants", headers=auth_headers(token))
+        assert merchants.get_json()["merchants"] == []
+
+    def test_csv_ingestion_rejects_structural_errors_and_row_limit(self, client, monkeypatch):
+        token = register(client, "csv-structural")["access_token"]
+        bad_name = client.post(
+            "/api/v1/ingestions/merchant-days/csv",
+            data=csv_upload(observations(days=1), filename="merchant-days.txt"),
+            content_type="multipart/form-data",
+            headers=auth_headers(token, "batch-csv-structural-0001"),
+        )
+        assert bad_name.status_code == 415
+
+        bad_header = client.post(
+            "/api/v1/ingestions/merchant-days/csv",
+            data={"file": (BytesIO(b"merchant_id,date\nM001,2026-01-01\n"), "merchant-days.csv")},
+            content_type="multipart/form-data",
+            headers=auth_headers(token, "batch-csv-header-0001"),
+        )
+        assert bad_header.status_code == 422
+
+        monkeypatch.setitem(application.app.config, "MAX_CSV_INGESTION_ROWS", 1)
+        limited = client.post(
+            "/api/v1/ingestions/merchant-days/csv",
+            data=csv_upload(observations(days=2)),
+            content_type="multipart/form-data",
+            headers=auth_headers(token, "batch-csv-limit-0001"),
+        )
+        assert limited.status_code == 413
 
 
 class TestTenantMemberAdministration:

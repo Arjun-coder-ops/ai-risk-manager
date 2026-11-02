@@ -64,6 +64,7 @@ an invitation or enterprise identity-provider flow.
 - `GET`/`POST /api/v1/members` (admin only; grants access to an existing active account)
 - `PATCH`/`DELETE /api/v1/members/{user_id}` (admin only)
 - `POST /api/v1/ingestions/merchant-days` (admin/analyst; requires `Idempotency-Key`)
+- `POST /api/v1/ingestions/merchant-days/csv` (admin/analyst; multipart `file` and `Idempotency-Key`)
 - `GET /api/v1/ingestions/{id}`
 - `GET /api/v1/merchants`
 - `GET /api/v1/audit-events`
@@ -83,6 +84,23 @@ the same observation/model/policy return the existing assessment rather than
 creating duplicate cases. A `HIGH` or `REVIEW` assessment opens a case and
 records its creation as an event; lower-risk and insufficient-evidence results
 do not open one automatically.
+
+## Ingestion contract
+
+JSON merchant-day ingestion is deliberately atomic: any invalid record rejects
+the entire request. CSV ingestion accepts a UTF-8 `.csv` file whose header is
+exactly the merchant-day aggregate schema. It validates rows independently and
+creates a durable batch with `SUCCEEDED`, `PARTIAL`, or `REJECTED` status.
+Valid rows commit together; invalid, duplicate-in-file, and already-persisted
+merchant-days are recorded in a bounded `error_summary` (the first 100 row
+errors) rather than silently dropped. A matching `Idempotency-Key` and file
+bytes replay the existing batch; reuse with different bytes returns `409`.
+
+CSV processing is synchronous and has a conservative, configurable
+`MAX_CSV_INGESTION_ROWS=1000` application limit in addition to the request-body
+limit. It is not a retrying background worker; queue-backed retries and
+transaction-level aggregation remain future work and must not be implied by
+this API.
 
 Cases support `OPEN`, `IN_REVIEW`, `ESCALATED`, `RESOLVED`, and
 `FALSE_POSITIVE`. The allowed transitions are deliberately one-way from the

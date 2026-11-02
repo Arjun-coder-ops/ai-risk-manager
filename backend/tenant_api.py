@@ -6,8 +6,10 @@ compatibility. New tenant data must use this authenticated ``/api/v1`` API.
 
 from __future__ import annotations
 
+import csv
 from datetime import date, datetime, timezone
 import hashlib
+from io import StringIO
 import json
 import os
 import re
@@ -34,6 +36,7 @@ from backend.models import (
 )
 from model.validation import (
     ObservationValidationError,
+    REQUIRED_INPUT_FIELDS,
     validate_observations,
     validate_request_identifiers,
 )
@@ -54,6 +57,15 @@ CASE_TRANSITIONS = {
 AUTO_CASE_RISK_LEVELS = frozenset({"HIGH", "REVIEW"})
 FEEDBACK_LABELS = frozenset({"CONFIRMED_FRAUD", "FALSE_POSITIVE", "INCONCLUSIVE"})
 MEMBERSHIP_ROLES = frozenset({"admin", "analyst", "viewer"})
+MAX_REPORTED_INGESTION_ERRORS = 100
+
+
+class CsvUploadError(ValueError):
+    """A controlled structural CSV upload error."""
+
+    def __init__(self, reason: str, status: int = 422):
+        super().__init__(reason)
+        self.status = status
 
 
 def api_error(reason: str, status: int):
@@ -85,9 +97,88 @@ def serialize_batch(batch: IngestionBatch, replayed: bool = False) -> dict:
         "received_count": batch.received_count,
         "accepted_count": batch.accepted_count,
         "rejected_count": batch.rejected_count,
+        "error_summary": batch.error_summary,
         "created_at": batch.created_at.isoformat(),
         "idempotent_replay": replayed,
     }
+
+
+def parse_csv_upload(upload) -> list[tuple[int, dict]]:
+    """Return CSV rows with their one-based source line numbers.
+
+    Parsing is intentionally strict about UTF-8 and the aggregate schema so
+    clients do not get a successful batch with silently ignored columns.
+    """
+    if upload is None or not upload.filename:
+        raise CsvUploadError("A CSV file is required in the file form field.", 400)
+    if not upload.filename.lower().endswith(".csv"):
+        raise CsvUploadError("Uploaded file must use a .csv filename.", 415)
+    try:
+        content = upload.read()
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise CsvUploadError("CSV file must be UTF-8 encoded.") from exc
+    if not text.strip():
+        raise CsvUploadError("CSV file must not be empty.")
+
+    try:
+        reader = csv.DictReader(StringIO(text))
+        headers = reader.fieldnames
+        if headers is None:
+            raise CsvUploadError("CSV file must include a header row.")
+        if len(headers) != len(set(headers)):
+            raise CsvUploadError("CSV header contains duplicate column names.")
+        missing = sorted(set(REQUIRED_INPUT_FIELDS) - set(headers))
+        unexpected = sorted(set(headers) - set(REQUIRED_INPUT_FIELDS))
+        if missing or unexpected:
+            raise CsvUploadError(
+                f"CSV header must contain exactly the required fields; missing={missing}, unexpected={unexpected}."
+            )
+        rows = []
+        maximum_rows = int(current_app.config.get("MAX_CSV_INGESTION_ROWS", 1000))
+        for line_number, row in enumerate(reader, start=2):
+            if len(rows) >= maximum_rows:
+                raise CsvUploadError(f"CSV file exceeds the {maximum_rows}-row ingestion limit.", 413)
+            if None in row:
+                raise CsvUploadError(f"CSV row {line_number} has more columns than the header.")
+            rows.append((line_number, row))
+    except csv.Error as exc:
+        raise CsvUploadError("CSV file could not be parsed.") from exc
+    if not rows:
+        raise CsvUploadError("CSV file must contain at least one data row.")
+    return rows
+
+
+def append_ingestion_error(errors: list[dict], line_number: int, reason: str) -> None:
+    if len(errors) < MAX_REPORTED_INGESTION_ERRORS:
+        errors.append({"line": line_number, "reason": reason})
+
+
+def validate_csv_rows(rows: list[tuple[int, dict]]) -> tuple[list[tuple[int, dict]], list[dict]]:
+    """Validate independently so one bad CSV row does not discard good rows."""
+    errors: list[dict] = []
+    accepted_by_key: dict[tuple[str, str], tuple[int, dict]] = {}
+    first_seen_line: dict[tuple[str, str], int] = {}
+    duplicate_keys: set[tuple[str, str]] = set()
+
+    for line_number, raw_row in rows:
+        try:
+            record = validate_observations(pd.DataFrame([raw_row])).to_dict(orient="records")[0]
+        except ObservationValidationError as exc:
+            append_ingestion_error(errors, line_number, str(exc).removeprefix("Row 0: "))
+            continue
+        key = (record["merchant_id"], record["date"])
+        if key in first_seen_line:
+            if key not in duplicate_keys:
+                original_line = first_seen_line[key]
+                accepted_by_key.pop(key, None)
+                append_ingestion_error(errors, original_line, "Duplicate merchant-day observation in CSV file.")
+                duplicate_keys.add(key)
+            append_ingestion_error(errors, line_number, "Duplicate merchant-day observation in CSV file.")
+            continue
+        first_seen_line[key] = line_number
+        accepted_by_key[key] = (line_number, record)
+    return list(accepted_by_key.values()), errors
 
 
 def serialize_member(membership: Membership, user: User) -> dict:
@@ -542,6 +633,130 @@ def ingest_merchant_days():
         write_audit(session, organization_id=g.principal.organization_id, actor_user_id=g.principal.user_id,
                     action="merchant_day.ingested", entity_type="ingestion_batch", entity_id=batch.id,
                     payload={"accepted_count": batch.accepted_count, "idempotency_key": idempotency_key})
+        session.commit()
+        return jsonify(serialize_batch(batch)), 201
+    except Exception:
+        session.rollback()
+        raise
+
+
+@tenant_api.route("/ingestions/merchant-days/csv", methods=["POST"])
+@require_auth({"admin", "analyst"})
+def ingest_merchant_days_csv():
+    """Synchronously ingest one CSV while retaining bounded row error evidence."""
+    idempotency_key = request.headers.get("Idempotency-Key", "")
+    if not IDEMPOTENCY_PATTERN.fullmatch(idempotency_key):
+        return api_error("Idempotency-Key header must contain 8-128 safe characters.", 400)
+    upload = request.files.get("file")
+    try:
+        rows = parse_csv_upload(upload)
+    except CsvUploadError as exc:
+        return api_error(str(exc), exc.status)
+    assert upload is not None  # parse_csv_upload guarantees this for type checkers.
+    upload.stream.seek(0)
+    payload_hash = hashlib.sha256(upload.read()).hexdigest()
+
+    session = g.db
+    try:
+        existing_batch = session.scalar(select(IngestionBatch).where(
+            IngestionBatch.organization_id == g.principal.organization_id,
+            IngestionBatch.idempotency_key == idempotency_key,
+        ))
+        if existing_batch is not None:
+            if existing_batch.payload_hash != payload_hash:
+                return api_error("Idempotency-Key has already been used with a different payload.", 409)
+            return jsonify(serialize_batch(existing_batch, replayed=True))
+
+        candidates, errors = validate_csv_rows(rows)
+        candidate_merchant_ids = sorted({record["merchant_id"] for _, record in candidates})
+        existing_merchants = {
+            merchant.external_id: merchant
+            for merchant in session.scalars(select(Merchant).where(
+                Merchant.organization_id == g.principal.organization_id,
+                Merchant.external_id.in_(candidate_merchant_ids),
+            ))
+        } if candidate_merchant_ids else {}
+        existing_keys = set()
+        if existing_merchants:
+            candidate_dates = sorted({date.fromisoformat(record["date"]) for _, record in candidates})
+            existing_keys = {
+                (merchant_id, observation_date.isoformat())
+                for merchant_id, observation_date in session.execute(
+                    select(Merchant.external_id, MerchantDayObservation.observation_date)
+                    .join(Merchant, Merchant.id == MerchantDayObservation.merchant_id)
+                    .where(
+                        Merchant.organization_id == g.principal.organization_id,
+                        Merchant.external_id.in_(candidate_merchant_ids),
+                        MerchantDayObservation.observation_date.in_(candidate_dates),
+                    )
+                )
+            }
+
+        persistable: list[tuple[int, dict]] = []
+        for line_number, record in candidates:
+            key = (record["merchant_id"], record["date"])
+            if key in existing_keys:
+                append_ingestion_error(errors, line_number, "Merchant-day observation already exists for this organization.")
+                continue
+            persistable.append((line_number, record))
+
+        for external_id in sorted({record["merchant_id"] for _, record in persistable}):
+            if external_id not in existing_merchants:
+                merchant = Merchant(organization_id=g.principal.organization_id, external_id=external_id)
+                session.add(merchant)
+                existing_merchants[external_id] = merchant
+        session.flush()
+
+        accepted_count = len(persistable)
+        rejected_count = len(rows) - accepted_count
+        batch = IngestionBatch(
+            organization_id=g.principal.organization_id,
+            created_by_user_id=g.principal.user_id,
+            idempotency_key=idempotency_key,
+            payload_hash=payload_hash,
+            status="SUCCEEDED" if rejected_count == 0 else "PARTIAL" if accepted_count else "REJECTED",
+            received_count=len(rows),
+            accepted_count=accepted_count,
+            rejected_count=rejected_count,
+            error_summary={
+                "source": "csv",
+                "error_count": rejected_count,
+                "reported_errors": errors,
+                "errors_truncated": rejected_count > len(errors),
+            },
+        )
+        session.add(batch)
+        session.flush()
+        for _, row in persistable:
+            merchant = existing_merchants[row["merchant_id"]]
+            session.add(MerchantDayObservation(
+                organization_id=g.principal.organization_id,
+                merchant_id=merchant.id,
+                ingestion_batch_id=batch.id,
+                observation_date=date.fromisoformat(row["date"]),
+                n_transactions=row["n_transactions"],
+                n_failed=row["n_failed"],
+                avg_amount=row["avg_amount"],
+                amount_std=row["amount_std"],
+                n_unique_users=row["n_unique_users"],
+                n_new_users=row["n_new_users"],
+                n_devices=row["n_devices"],
+                distinct_regions_seen=row["distinct_regions_seen"],
+            ))
+        write_audit(
+            session,
+            organization_id=g.principal.organization_id,
+            actor_user_id=g.principal.user_id,
+            action="merchant_day.csv_ingested",
+            entity_type="ingestion_batch",
+            entity_id=batch.id,
+            payload={
+                "accepted_count": accepted_count,
+                "rejected_count": rejected_count,
+                "status": batch.status,
+                "idempotency_key": idempotency_key,
+            },
+        )
         session.commit()
         return jsonify(serialize_batch(batch)), 201
     except Exception:
