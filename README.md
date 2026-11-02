@@ -140,6 +140,29 @@ after training and validation, touched exactly once.
 Model comparison on validation (PR-AUC): Logistic Regression 0.757, Random
 Forest 0.884, **Gradient Boosting 0.928 (selected)**.
 
+## Independent synthetic OOD stress test
+
+The held-out result above is synthetic **in-distribution** evidence only. A
+separately designed, 2027 synthetic OOD benchmark scores the frozen model
+without retraining or tuning it. It uses a different population and generation
+process (heavy-tailed values/counts, structural business shifts, promotions,
+outages, credential-stuffing, mule-network, and account-takeover scenarios).
+
+| Metric | Independent synthetic OOD result |
+|---|---:|
+| Raw / scored merchant-days | 16,500 / 15,730 |
+| Positive rate | 6.3064% |
+| ROC-AUC | 0.8962 |
+| PR-AUC | 0.4115 |
+| REVIEW precision / recall | 0.1103 / 0.9667 |
+| HIGH precision / recall | 0.1747 / 0.9062 |
+
+This is intentionally a much harsher synthetic stress test, not external
+validation or real-world performance. Its full result is
+`evaluation/ood_benchmark_results.json`; the candidate-dataset review and
+benchmark boundaries are documented in
+[`docs/external-data-provenance.md`](docs/external-data-provenance.md).
+
 ## False-Positive Cost Model
 
 Configurable, disclosed assumptions (`model/cost_model.py`) — not real

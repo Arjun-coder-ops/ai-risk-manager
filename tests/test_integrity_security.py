@@ -178,8 +178,11 @@ class TestApiAndFrontendSecurity:
 
         # The simulator event manifest includes offline-only ground truth and
         # must never be exposed as a web-served asset.
-        manifest = client.get("/data/raw/simulation_manifest.json")
-        assert manifest.status_code == 404
+        for offline_artifact in (
+            "/data/raw/simulation_manifest.json",
+            "/evaluation/ood_benchmark_results.json",
+        ):
+            assert client.get(offline_artifact).status_code == 404
 
     def test_frontend_uses_no_innerhtml_sink_for_dynamic_api_data(self):
         frontend = FRONTEND_PATH.read_text(encoding="utf-8")
