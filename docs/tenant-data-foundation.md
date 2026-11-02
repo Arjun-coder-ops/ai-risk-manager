@@ -15,6 +15,7 @@ explicitly synthetic backwards-compatible demo and are not a multi-tenant API.
 | Atomic batch ingestion | Prevents a partly accepted merchant-day batch from silently contaminating feature history. | Row-by-row partial writes would need a more complex error/retry contract. |
 | Database-backed assessments | Scores are reproducible from the organization’s persisted observations and retain model/policy/evidence traceability. | Reading the legacy CSV would mix demonstration data with tenant data. |
 | Explicit case state machine | Constrains investigation transitions and requires a decision plus note to close a case. | Free-form statuses are easier initially but make audit and operating metrics unreliable. |
+| Verified analyst feedback | Captures human outcomes separately from model decisions, then requires an admin to verify them. | Feeding unverified labels directly into training would create a poisoning and feedback-loop risk. |
 
 ## Schema ownership
 
@@ -62,6 +63,8 @@ invitation or enterprise identity-provider flow.
 - `GET /api/v1/cases/{id}/events`
 - `POST /api/v1/cases/{id}/assignment` (admin/analyst)
 - `POST /api/v1/cases/{id}/transitions` (admin/analyst)
+- `POST`/`GET /api/v1/risk-assessments/{id}/feedback` (admin/analyst)
+- `POST /api/v1/feedback/{id}/verify` (admin only)
 
 `POST /api/v1/risk-assessments` reads only the authenticated organization’s
 persisted merchant-day observations. It stores the model version, policy
@@ -78,8 +81,16 @@ analyst note. Assignment and every status transition create immutable event
 records as well as a tenant-scoped audit event. Admins can assign any active
 member of the organization; analysts can assign only themselves or unassign.
 
+Analysts and admins may append a `CONFIRMED_FRAUD`, `FALSE_POSITIVE`, or
+`INCONCLUSIVE` outcome with a required note to an assessment. The submission
+outcome and note are tenant-scoped and immutable through the API; verification
+is a one-way admin action that records the verifier and timestamp. Submissions and
+verifications also appear in audit logs and the linked case event history.
+Feedback does not alter an assessment, case decision, threshold, or model, and
+is not consumed by training automatically.
+
 The workflow is synchronous in this milestone. It has no background workers,
-notification delivery, user-provisioning flow, feedback/retraining loop, or
+notification delivery, user-provisioning flow, retraining workflow, or
 concurrency version token yet. No real merchant data should enter the legacy
 demo routes, and the bootstrap registration endpoint must not be publicly
 exposed.

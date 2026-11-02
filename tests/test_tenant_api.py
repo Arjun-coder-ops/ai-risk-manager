@@ -8,11 +8,14 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+from werkzeug.security import generate_password_hash
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 import app as application  # noqa: E402
-from backend.database import configure_database, create_schema  # noqa: E402
+from backend.auth import issue_access_token  # noqa: E402
+from backend.database import configure_database, create_schema, get_session  # noqa: E402
+from backend.models import Membership, User  # noqa: E402
 
 
 @pytest.fixture
@@ -41,6 +44,22 @@ def auth_headers(token: str, idempotency_key: str | None = None):
     if idempotency_key:
         headers["Idempotency-Key"] = idempotency_key
     return headers
+
+
+def create_member_token(organization_id: str, email: str, role: str) -> str:
+    """Provision a test-only organization member without exposing a public API."""
+    session = get_session()
+    try:
+        user = User(email=email, password_hash=generate_password_hash("test-only-password"))
+        session.add(user)
+        session.flush()
+        membership = Membership(organization_id=organization_id, user_id=user.id, role=role)
+        session.add(membership)
+        session.commit()
+        with application.app.app_context():
+            return issue_access_token(user, membership)
+    finally:
+        session.close()
 
 
 def observations(merchant_id: str = "M0001", days: int = 8):
@@ -288,3 +307,72 @@ class TestTenantRiskAssessmentAndCases:
         assert assessment.status_code == 201, assessment.get_json()
         assert assessment.get_json()["status"] == "insufficient_evidence"
         assert assessment.get_json()["case_id"] is None
+
+    def test_feedback_is_scoped_audited_and_requires_admin_verification(self, client, monkeypatch):
+        admin_token, assessment = self._create_case(client, monkeypatch, "feedback")
+        organization_id = client.get("/api/v1/auth/me", headers=auth_headers(admin_token)).get_json()["organization_id"]
+        analyst_token = create_member_token(organization_id, "analyst-feedback@example.test", "analyst")
+
+        created = client.post(
+            f"/api/v1/risk-assessments/{assessment['id']}/feedback",
+            json={"label": "false_positive", "notes": "The merchant supplied valid supporting invoices."},
+            headers=auth_headers(analyst_token),
+        )
+        assert created.status_code == 201, created.get_json()
+        feedback = created.get_json()
+        assert feedback["label"] == "FALSE_POSITIVE"
+        assert feedback["verified"] is False
+        assert feedback["submitted_by_user_id"]
+
+        duplicate = client.post(
+            f"/api/v1/risk-assessments/{assessment['id']}/feedback",
+            json={"label": "FALSE_POSITIVE", "notes": "The merchant supplied valid supporting invoices."},
+            headers=auth_headers(analyst_token),
+        )
+        assert duplicate.status_code == 200
+        assert duplicate.get_json()["id"] == feedback["id"]
+
+        analyst_verify = client.post(
+            f"/api/v1/feedback/{feedback['id']}/verify",
+            json={},
+            headers=auth_headers(analyst_token),
+        )
+        assert analyst_verify.status_code == 403
+
+        verified = client.post(
+            f"/api/v1/feedback/{feedback['id']}/verify",
+            json={},
+            headers=auth_headers(admin_token),
+        )
+        assert verified.status_code == 200
+        assert verified.get_json()["verified"] is True
+        assert verified.get_json()["verified_by_user_id"]
+        assert verified.get_json()["verified_at"]
+
+        events = client.get(f"/api/v1/cases/{assessment['case_id']}/events", headers=auth_headers(admin_token))
+        assert [event["event_type"] for event in events.get_json()["events"]][-2:] == [
+            "case.feedback_submitted",
+            "case.feedback_verified",
+        ]
+
+        other_token = register(client, "feedback-other")["access_token"]
+        foreign = client.get(
+            f"/api/v1/risk-assessments/{assessment['id']}/feedback",
+            headers=auth_headers(other_token),
+        )
+        assert foreign.status_code == 404
+
+    @pytest.mark.parametrize("payload", [
+        {"label": "NOT_A_LABEL", "notes": "A complete note."},
+        {"label": "FALSE_POSITIVE", "notes": ""},
+        {"label": "FALSE_POSITIVE", "notes": "A complete note.", "unexpected": True},
+    ])
+    def test_feedback_validation_rejects_malformed_payloads(self, client, monkeypatch, payload):
+        suffix = f"feedback-validation-{payload['label'].lower().replace('_', '-')}"
+        token, assessment = self._create_case(client, monkeypatch, suffix)
+        response = client.post(
+            f"/api/v1/risk-assessments/{assessment['id']}/feedback",
+            json=payload,
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 422

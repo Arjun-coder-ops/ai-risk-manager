@@ -186,7 +186,12 @@ class AnalystFeedback(Base):
     risk_assessment_id: Mapped[str] = mapped_column(ForeignKey("risk_assessments.id", ondelete="CASCADE"), nullable=False, index=True)
     submitted_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     label: Mapped[str] = mapped_column(String(64), nullable=False)
+    notes: Mapped[str] = mapped_column(String(2000), nullable=False)
     verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    verified_by_user_id: Mapped[str | None] = mapped_column(ForeignKey(
+        "users.id", name="fk_analyst_feedback_verified_by_user", ondelete="SET NULL"
+    ))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

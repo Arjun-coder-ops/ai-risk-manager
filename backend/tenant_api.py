@@ -20,6 +20,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from backend.auth import issue_access_token, jwt_secret, require_auth
 from backend.database import get_session
 from backend.models import (
+    AnalystFeedback,
     AuditEvent,
     IngestionBatch,
     InvestigationCase,
@@ -51,6 +52,7 @@ CASE_TRANSITIONS = {
     "FALSE_POSITIVE": frozenset(),
 }
 AUTO_CASE_RISK_LEVELS = frozenset({"HIGH", "REVIEW"})
+FEEDBACK_LABELS = frozenset({"CONFIRMED_FRAUD", "FALSE_POSITIVE", "INCONCLUSIVE"})
 
 
 def api_error(reason: str, status: int):
@@ -111,6 +113,20 @@ def serialize_assessment(
     }
 
 
+def serialize_feedback(feedback: AnalystFeedback) -> dict:
+    return {
+        "id": feedback.id,
+        "risk_assessment_id": feedback.risk_assessment_id,
+        "label": feedback.label,
+        "notes": feedback.notes,
+        "submitted_by_user_id": feedback.submitted_by_user_id,
+        "verified": feedback.verified,
+        "verified_by_user_id": feedback.verified_by_user_id,
+        "verified_at": feedback.verified_at.isoformat() if feedback.verified_at else None,
+        "created_at": feedback.created_at.isoformat(),
+    }
+
+
 def serialize_case(case: InvestigationCase, merchant: Merchant, assessment: RiskAssessment) -> dict:
     return {
         "id": case.id,
@@ -154,6 +170,18 @@ def assessment_context(session, assessment_id: str, organization_id: str):
             RiskAssessment.organization_id == organization_id,
             MerchantDayObservation.organization_id == organization_id,
             Merchant.organization_id == organization_id,
+        )
+    ).one_or_none()
+
+
+def feedback_context(session, feedback_id: str, organization_id: str):
+    return session.execute(
+        select(AnalystFeedback, RiskAssessment)
+        .join(RiskAssessment, RiskAssessment.id == AnalystFeedback.risk_assessment_id)
+        .where(
+            AnalystFeedback.id == feedback_id,
+            AnalystFeedback.organization_id == organization_id,
+            RiskAssessment.organization_id == organization_id,
         )
     ).one_or_none()
 
@@ -527,6 +555,137 @@ def get_risk_assessment(assessment_id: str):
         InvestigationCase.risk_assessment_id == assessment.id,
     ))
     return jsonify(serialize_assessment(assessment, merchant, observation, case=case))
+
+
+@tenant_api.route("/risk-assessments/<assessment_id>/feedback", methods=["POST"])
+@require_auth({"admin", "analyst"})
+def submit_feedback(assessment_id: str):
+    """Record a human outcome without changing a production model decision."""
+    body, error = request_object()
+    if error:
+        return error
+    if set(body) != {"label", "notes"}:
+        return api_error("Request body must contain only label and notes.", 422)
+    if not isinstance(body["label"], str):
+        return api_error("label must be a string.", 422)
+    label = body["label"].strip().upper()
+    if label not in FEEDBACK_LABELS:
+        return api_error(f"label must be one of {sorted(FEEDBACK_LABELS)}.", 422)
+    notes = body["notes"]
+    if not isinstance(notes, str) or not 1 <= len(notes.strip()) <= 2000:
+        return api_error("notes must be a non-empty string of at most 2000 characters.", 422)
+
+    context = assessment_context(g.db, assessment_id, g.principal.organization_id)
+    if context is None:
+        return api_error("Risk assessment was not found.", 404)
+    assessment, _, _ = context
+    normalized_notes = notes.strip()
+    # A correction is represented by a new feedback record with a different
+    # outcome or note; exact retries return the existing immutable record.
+    existing = g.db.scalar(select(AnalystFeedback).where(
+        AnalystFeedback.organization_id == g.principal.organization_id,
+        AnalystFeedback.risk_assessment_id == assessment.id,
+        AnalystFeedback.submitted_by_user_id == g.principal.user_id,
+        AnalystFeedback.label == label,
+        AnalystFeedback.notes == normalized_notes,
+    ))
+    if existing is not None:
+        return jsonify(serialize_feedback(existing))
+
+    feedback = AnalystFeedback(
+        organization_id=g.principal.organization_id,
+        risk_assessment_id=assessment.id,
+        submitted_by_user_id=g.principal.user_id,
+        label=label,
+        notes=normalized_notes,
+    )
+    g.db.add(feedback)
+    g.db.flush()
+    linked_cases = g.db.scalars(select(InvestigationCase).where(
+        InvestigationCase.organization_id == g.principal.organization_id,
+        InvestigationCase.risk_assessment_id == assessment.id,
+    )).all()
+    for case in linked_cases:
+        g.db.add(InvestigationEvent(
+            organization_id=g.principal.organization_id,
+            case_id=case.id,
+            actor_user_id=g.principal.user_id,
+            event_type="case.feedback_submitted",
+            payload={"feedback_id": feedback.id, "label": label},
+        ))
+    write_audit(
+        g.db,
+        organization_id=g.principal.organization_id,
+        actor_user_id=g.principal.user_id,
+        action="feedback.submitted",
+        entity_type="analyst_feedback",
+        entity_id=feedback.id,
+        payload={"risk_assessment_id": assessment.id, "label": label},
+    )
+    try:
+        g.db.commit()
+    except Exception:
+        g.db.rollback()
+        raise
+    return jsonify(serialize_feedback(feedback)), 201
+
+
+@tenant_api.route("/risk-assessments/<assessment_id>/feedback", methods=["GET"])
+@require_auth({"admin", "analyst"})
+def list_feedback(assessment_id: str):
+    if assessment_context(g.db, assessment_id, g.principal.organization_id) is None:
+        return api_error("Risk assessment was not found.", 404)
+    feedback = g.db.scalars(select(AnalystFeedback).where(
+        AnalystFeedback.organization_id == g.principal.organization_id,
+        AnalystFeedback.risk_assessment_id == assessment_id,
+    ).order_by(AnalystFeedback.created_at)).all()
+    return jsonify({"feedback": [serialize_feedback(item) for item in feedback]})
+
+
+@tenant_api.route("/feedback/<feedback_id>/verify", methods=["POST"])
+@require_auth({"admin"})
+def verify_feedback(feedback_id: str):
+    body, error = request_object()
+    if error:
+        return error
+    if body:
+        return api_error("Feedback verification does not accept request fields.", 422)
+    context = feedback_context(g.db, feedback_id, g.principal.organization_id)
+    if context is None:
+        return api_error("Analyst feedback was not found.", 404)
+    feedback, assessment = context
+    if feedback.verified:
+        return api_error("Analyst feedback has already been verified.", 409)
+    feedback.verified = True
+    feedback.verified_by_user_id = g.principal.user_id
+    feedback.verified_at = datetime.now(timezone.utc)
+    linked_cases = g.db.scalars(select(InvestigationCase).where(
+        InvestigationCase.organization_id == g.principal.organization_id,
+        InvestigationCase.risk_assessment_id == assessment.id,
+    )).all()
+    for case in linked_cases:
+        g.db.add(InvestigationEvent(
+            organization_id=g.principal.organization_id,
+            case_id=case.id,
+            actor_user_id=g.principal.user_id,
+            event_type="case.feedback_verified",
+            payload={"feedback_id": feedback.id, "label": feedback.label},
+        ))
+    write_audit(
+        g.db,
+        organization_id=g.principal.organization_id,
+        actor_user_id=g.principal.user_id,
+        action="feedback.verified",
+        entity_type="analyst_feedback",
+        entity_id=feedback.id,
+        payload={"risk_assessment_id": assessment.id, "label": feedback.label},
+    )
+    try:
+        g.db.commit()
+    except Exception:
+        g.db.rollback()
+        raise
+    return jsonify(serialize_feedback(feedback))
 
 
 @tenant_api.route("/cases", methods=["GET"])
