@@ -32,11 +32,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
 from sklearn.metrics import average_precision_score, precision_recall_fscore_support, confusion_matrix
 
-from features import FEATURE_COLUMNS
+from features import FEATURE_COLUMNS, FEATURE_SCHEMA_VERSION
 from split import time_split
 from cost_model import CostAssumptions, evaluate_cost
 
-MODEL_VERSION = "fraud-spike-v1"
+MODEL_VERSION = "fraud-spike-v2-eod"
 MODEL_OUT_PATH = os.path.join(REPO_ROOT, "model/artifacts/model.joblib")
 META_OUT_PATH = os.path.join(REPO_ROOT, "model/artifacts/model_meta.json")
 
@@ -130,6 +130,7 @@ def main():
     meta = {
         "model_version": MODEL_VERSION,
         "model_type": best_name,
+        "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "feature_columns": FEATURE_COLUMNS,
         "review_threshold": review_threshold_info["threshold"],
         "high_threshold": high_candidate["threshold"],

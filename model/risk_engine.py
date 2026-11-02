@@ -31,7 +31,7 @@ import pandas as pd
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-from features import FEATURE_COLUMNS, build_features, MIN_HISTORY_DAYS
+from features import FEATURE_COLUMNS, FEATURE_SCHEMA_VERSION, build_features, MIN_HISTORY_DAYS
 from validation import (
     ObservationValidationError,
     normalize_date,
@@ -53,6 +53,15 @@ FEATURE_EXPLANATIONS = {
     "device_diversity_ratio": "The ratio of devices to users today is unusually {direction} compared to normal.",
     "region_spread_zscore": "The number of distinct regions transacting today is unusually {direction} compared to this merchant's usual geographic footprint.",
     "rolling_volume_trend": "Recent 3-day transaction momentum is unusually {direction} compared to the 14-day trend.",
+    "weekday_volume_ratio": "Transaction volume is unusually {direction} for this merchant's matching weekday pattern.",
+    "txn_volume_percentile": "Today's transaction volume sits unusually {direction} in this merchant's recent volume distribution.",
+    "ewm_volume_zscore": "Transaction volume is unusually {direction} relative to the merchant's exponentially weighted recent baseline.",
+    "recent_volume_volatility_ratio": "Recent transaction-volume variability is unusually {direction} compared with the longer baseline.",
+    "txn_acceleration_ratio": "Transaction volume accelerated unusually {direction} versus the immediately preceding days.",
+    "trend_adjusted_volume_zscore": "Transaction volume is unusually {direction} even after accounting for the recent trend.",
+    "volume_change_point_score": "The merchant's prior transaction-volume pattern shows an unusually strong regime shift.",
+    "device_diversity_delta": "Today's devices-per-user mix is unusually {direction} compared with this merchant's recent pattern.",
+    "historical_anomaly_rate": "This merchant has an unusually {direction} recent frequency of raw behavioural anomalies.",
 }
 
 
@@ -89,6 +98,16 @@ class RiskEngine:
         self.review_threshold = self.meta["review_threshold"]
         self.high_threshold = self.meta["high_threshold"]
         self.model_version = self.meta["model_version"]
+        if self.meta.get("feature_schema_version") != FEATURE_SCHEMA_VERSION:
+            raise RiskEngineError(
+                "Model feature schema does not match the runtime feature contract. "
+                "Run `python model/train.py` to regenerate compatible artifacts."
+            )
+        if self.meta.get("feature_columns") != FEATURE_COLUMNS:
+            raise RiskEngineError(
+                "Model feature columns do not match the runtime feature contract. "
+                "Run `python model/train.py` to regenerate compatible artifacts."
+            )
 
         # SHAP explainer — optional, absent gracefully if shap is not installed.
         #

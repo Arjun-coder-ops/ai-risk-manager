@@ -56,9 +56,10 @@ prototype this size). Frontend: a single-page dashboard
 
 1. `model/generate_data.py` — generates synthetic merchant-day transaction
    data (documented methodology below).
-2. `model/features.py` — computes 8 merchant-relative features per day
-   using `.shift(1)` + rolling windows so no feature ever sees same-day or
-   future data.
+2. `model/features.py` — computes the versioned end-of-day merchant-relative
+   feature contract using prior-only calendar windows, same-weekday
+   normalization, rolling distributions, EWM state, volatility, trend, and
+   prior anomaly frequency. See [`docs/feature-contract.md`](docs/feature-contract.md).
 3. `model/split.py` — time-based train/validation/test split.
 4. `model/train.py` — trains and compares 3 candidate models on train,
    selects the winner by validation PR-AUC, then picks two decision
@@ -97,7 +98,8 @@ in [`docs/synthetic-data-provenance.md`](docs/synthetic-data-provenance.md).
 - Source: synthetic (`model/generate_data.py`, seed=42, fully reproducible)
 - Size and class distribution: generated values are recorded in the committed
   offline-only `data/raw/simulation_manifest.json`
-- Features: 8 engineered signals, described in `model/features.py`
+- Features: 17 versioned end-of-day signals, described in `model/features.py`
+  and [`docs/feature-contract.md`](docs/feature-contract.md)
 - Class distribution: 7.02% positive overall (train 7.48%, validation 6.86%,
   test 7.32%)
 - **Limitation**: this is a simulation of plausible merchant behaviour, not
@@ -112,33 +114,33 @@ after training and validation, touched exactly once.
 
 | Metric | Value |
 |---|---|
-| ROC-AUC | **0.9838** |
-| PR-AUC (appropriate for 7.32% positive rate) | **0.9438** |
+| ROC-AUC | **0.9903** |
+| PR-AUC (appropriate for 7.32% positive rate) | **0.9500** |
 
-**HIGH tier** (score ≥ 0.64, direct merchant alert, validation-tuned for precision ≥ 0.95):
+**HIGH tier** (score ≥ 0.67, direct merchant alert, validation-tuned for precision ≥ 0.95):
 
 | | |
 |---|---|
-| Precision | 0.9594 |
-| Recall | 0.8381 |
-| F1 | 0.8947 |
+| Precision | 0.9599 |
+| Recall | 0.8492 |
+| F1 | 0.9012 |
 | False positive rate | 0.28% |
-| Confusion matrix | TP 378, FP 16, FN 73, TN 5690 |
-| Estimated cost | ₹7,200 (FP) + ₹584,000 (FN) = **₹591,200** |
+| Confusion matrix | TP 383, FP 16, FN 68, TN 5690 |
+| Estimated cost | ₹7,200 (FP) + ₹544,000 (FN) = **₹551,200** |
 
-**REVIEW tier** (score ≥ 0.07, flag for analyst, validation-tuned to minimize total business cost):
+**REVIEW tier** (score ≥ 0.10, flag for analyst, validation-tuned to minimize total business cost):
 
 | | |
 |---|---|
-| Precision | 0.7331 |
-| Recall | 0.9379 |
-| F1 | 0.8230 |
-| False positive rate | 2.70% |
-| Confusion matrix | TP 423, FP 154, FN 28, TN 5552 |
-| Estimated cost | ₹69,300 (FP) + ₹224,000 (FN) = **₹293,300** |
+| Precision | 0.8154 |
+| Recall | 0.9401 |
+| F1 | 0.8733 |
+| False positive rate | 1.68% |
+| Confusion matrix | TP 424, FP 96, FN 27, TN 5610 |
+| Estimated cost | ₹43,200 (FP) + ₹216,000 (FN) = **₹259,200** |
 
-Model comparison on validation (PR-AUC): Logistic Regression 0.757, Random
-Forest 0.884, **Gradient Boosting 0.928 (selected)**.
+Model comparison on validation (PR-AUC): Logistic Regression 0.753, Random
+Forest 0.882, **Gradient Boosting 0.931 (selected)**.
 
 ## Independent synthetic OOD stress test
 
@@ -152,10 +154,10 @@ outages, credential-stuffing, mule-network, and account-takeover scenarios).
 |---|---:|
 | Raw / scored merchant-days | 16,500 / 15,730 |
 | Positive rate | 6.3064% |
-| ROC-AUC | 0.8962 |
-| PR-AUC | 0.4115 |
-| REVIEW precision / recall | 0.1103 / 0.9667 |
-| HIGH precision / recall | 0.1747 / 0.9062 |
+| ROC-AUC | 0.9390 |
+| PR-AUC | 0.6681 |
+| REVIEW precision / recall | 0.1410 / 0.9698 |
+| HIGH precision / recall | 0.2164 / 0.9022 |
 
 This is intentionally a much harsher synthetic stress test, not external
 validation or real-world performance. Its full result is

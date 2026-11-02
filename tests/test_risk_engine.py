@@ -1,13 +1,19 @@
 import sys
+import json
 import os
 import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "model"))
 
-from features import build_features, FEATURE_COLUMNS, MIN_HISTORY_DAYS  # noqa: E402
+from features import (  # noqa: E402
+    FEATURE_COLUMNS,
+    FEATURE_SCHEMA_VERSION,
+    MIN_HISTORY_DAYS,
+    build_features,
+)
 from cost_model import CostAssumptions, evaluate_cost  # noqa: E402
-from risk_engine import RiskEngine, RiskEngineError  # noqa: E402
+from risk_engine import META_PATH, RiskEngine, RiskEngineError  # noqa: E402
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "merchant_daily_transactions.csv")
 
@@ -62,6 +68,29 @@ class TestFeatureEngineering:
         early_rows = featured.iloc[:MIN_HISTORY_DAYS]
         assert (~early_rows["has_sufficient_history"]).all()
 
+    def test_feature_schema_version_and_neutral_cold_start_values(self, raw_df):
+        merchant_id = raw_df.merchant_id.iloc[0]
+        first = build_features(raw_df[raw_df.merchant_id == merchant_id]).iloc[0]
+        assert first["feature_schema_version"] == FEATURE_SCHEMA_VERSION
+        assert first["weekday_volume_ratio"] == pytest.approx(1.0)
+        assert first["txn_volume_percentile"] == pytest.approx(0.5)
+        assert first["ewm_volume_zscore"] == pytest.approx(0.0)
+        assert first["historical_anomaly_rate"] == pytest.approx(0.0)
+
+    def test_historical_anomaly_rate_excludes_current_day(self, raw_df):
+        merchant_id = raw_df.merchant_id.iloc[0]
+        history = raw_df[raw_df.merchant_id == merchant_id].sort_values("date").reset_index(drop=True)
+        target_index = 30
+        baseline = build_features(history)
+        altered = history.copy()
+        altered.loc[target_index, "n_transactions"] *= 50
+        # The count relationships remain valid: only the transaction ceiling
+        # increases.  A current-day outlier must not alter a prior-only rate.
+        changed = build_features(altered)
+        assert changed.loc[target_index, "historical_anomaly_rate"] == pytest.approx(
+            baseline.loc[target_index, "historical_anomaly_rate"], abs=1e-9
+        )
+
 
 class TestCostModel:
     def test_cost_scales_with_counts(self):
@@ -102,6 +131,16 @@ class TestRiskEnginePolicy:
 
 
 class TestFailureHandling:
+    def test_rejects_model_artifact_with_incompatible_feature_schema(self, tmp_path):
+        with open(META_PATH, encoding="utf-8") as handle:
+            metadata = json.load(handle)
+        metadata["feature_schema_version"] = "incompatible-schema"
+        incompatible_meta = tmp_path / "model_meta.json"
+        incompatible_meta.write_text(json.dumps(metadata), encoding="utf-8")
+
+        with pytest.raises(RiskEngineError, match="feature schema"):
+            RiskEngine(meta_path=str(incompatible_meta))
+
     def test_missing_merchant(self, engine, raw_df_str_date):
         result = engine.score_merchant_day(raw_df_str_date, "2026-06-01", "NOT_A_REAL_MERCHANT")
         assert result.status == "error"

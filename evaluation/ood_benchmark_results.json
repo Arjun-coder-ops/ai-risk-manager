@@ -1,6 +1,6 @@
 {
   "benchmark_name": "independent-synthetic-ood-v1",
-  "model_version": "fraud-spike-v1",
+  "model_version": "fraud-spike-v2-eod",
   "model_type": "gradient_boosting",
   "provenance": {
     "source": "evaluation/ood_benchmark.py",
@@ -20,32 +20,32 @@
   "raw_merchant_days": 16500,
   "scored_merchant_days": 15730,
   "positive_rate": 0.063064,
-  "roc_auc": 0.8962,
-  "pr_auc": 0.4115,
+  "roc_auc": 0.939,
+  "pr_auc": 0.6681,
   "review_tier": {
-    "threshold": 0.07,
-    "precision": 0.1103,
-    "recall": 0.9667,
-    "f1": 0.1981,
-    "false_positive_rate": 0.5246,
+    "threshold": 0.1,
+    "precision": 0.141,
+    "recall": 0.9698,
+    "f1": 0.2462,
+    "false_positive_rate": 0.3976,
     "confusion_matrix": {
-      "tp": 959,
-      "fp": 7732,
-      "tn": 7006,
-      "fn": 33
+      "tp": 962,
+      "fp": 5860,
+      "tn": 8878,
+      "fn": 30
     }
   },
   "high_tier": {
-    "threshold": 0.64,
-    "precision": 0.1747,
-    "recall": 0.9062,
-    "f1": 0.2929,
-    "false_positive_rate": 0.2882,
+    "threshold": 0.67,
+    "precision": 0.2164,
+    "recall": 0.9022,
+    "f1": 0.3491,
+    "false_positive_rate": 0.2198,
     "confusion_matrix": {
-      "tp": 899,
-      "fp": 4247,
-      "tn": 10491,
-      "fn": 93
+      "tp": 895,
+      "fp": 3240,
+      "tn": 11498,
+      "fn": 97
     }
   }
 }
