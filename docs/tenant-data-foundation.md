@@ -16,6 +16,7 @@ explicitly synthetic backwards-compatible demo and are not a multi-tenant API.
 | Database-backed assessments | Scores are reproducible from the organization’s persisted observations and retain model/policy/evidence traceability. | Reading the legacy CSV would mix demonstration data with tenant data. |
 | Explicit case state machine | Constrains investigation transitions and requires a decision plus note to close a case. | Free-form statuses are easier initially but make audit and operating metrics unreliable. |
 | Verified analyst feedback | Captures human outcomes separately from model decisions, then requires an admin to verify them. | Feeding unverified labels directly into training would create a poisoning and feedback-loop risk. |
+| Existing-account membership administration | Lets tenant admins grant, change, or revoke RBAC membership without collecting another user's password. | Public invitations need email delivery, expiry, and account-recovery controls that are intentionally deferred. |
 
 ## Schema ownership
 
@@ -53,6 +54,8 @@ invitation or enterprise identity-provider flow.
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
+- `GET`/`POST /api/v1/members` (admin only; grants access to an existing active account)
+- `PATCH`/`DELETE /api/v1/members/{user_id}` (admin only)
 - `POST /api/v1/ingestions/merchant-days` (admin/analyst; requires `Idempotency-Key`)
 - `GET /api/v1/ingestions/{id}`
 - `GET /api/v1/merchants`
@@ -89,8 +92,14 @@ verifications also appear in audit logs and the linked case event history.
 Feedback does not alter an assessment, case decision, threshold, or model, and
 is not consumed by training automatically.
 
+An admin can grant an existing active account the `admin`, `analyst`, or
+`viewer` role, change that role, or revoke the membership. The API enforces
+organization scope and cannot remove or demote the final admin. It deliberately
+does not create accounts, accept another user's password, or issue public
+invitation tokens; production onboarding still needs an invitation/SSO flow.
+
 The workflow is synchronous in this milestone. It has no background workers,
-notification delivery, user-provisioning flow, retraining workflow, or
+notification delivery, account provisioning/invitation flow, retraining workflow, or
 concurrency version token yet. No real merchant data should enter the legacy
 demo routes, and the bootstrap registration endpoint must not be publicly
 exposed.

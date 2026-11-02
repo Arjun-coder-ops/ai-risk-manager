@@ -9,8 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
+# requirements.txt includes the reviewed lock file, so both must be present
+# before pip resolves dependencies in the build stage.
+COPY requirements.txt requirements.lock ./
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Stage 2: Runtime

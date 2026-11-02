@@ -53,6 +53,7 @@ CASE_TRANSITIONS = {
 }
 AUTO_CASE_RISK_LEVELS = frozenset({"HIGH", "REVIEW"})
 FEEDBACK_LABELS = frozenset({"CONFIRMED_FRAUD", "FALSE_POSITIVE", "INCONCLUSIVE"})
+MEMBERSHIP_ROLES = frozenset({"admin", "analyst", "viewer"})
 
 
 def api_error(reason: str, status: int):
@@ -86,6 +87,16 @@ def serialize_batch(batch: IngestionBatch, replayed: bool = False) -> dict:
         "rejected_count": batch.rejected_count,
         "created_at": batch.created_at.isoformat(),
         "idempotent_replay": replayed,
+    }
+
+
+def serialize_member(membership: Membership, user: User) -> dict:
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "role": membership.role,
+        "is_active": user.is_active,
+        "created_at": membership.created_at.isoformat(),
     }
 
 
@@ -184,6 +195,28 @@ def feedback_context(session, feedback_id: str, organization_id: str):
             RiskAssessment.organization_id == organization_id,
         )
     ).one_or_none()
+
+
+def membership_context(session, user_id: str, organization_id: str):
+    return session.execute(
+        select(Membership, User)
+        .join(User, User.id == Membership.user_id)
+        .where(
+            Membership.organization_id == organization_id,
+            Membership.user_id == user_id,
+        )
+    ).one_or_none()
+
+
+def is_last_admin(session, membership: Membership, next_role: str | None = None) -> bool:
+    """Prevent a tenant from becoming inaccessible through admin removal."""
+    if membership.role != "admin" or next_role == "admin":
+        return False
+    admin_memberships = session.scalars(select(Membership.id).where(
+        Membership.organization_id == membership.organization_id,
+        Membership.role == "admin",
+    )).all()
+    return len(admin_memberships) <= 1
 
 
 @tenant_api.route("/auth/register", methods=["POST"])
@@ -285,6 +318,137 @@ def login():
 @require_auth()
 def me():
     return jsonify({"user_id": g.principal.user_id, "organization_id": g.principal.organization_id, "role": g.principal.role})
+
+
+@tenant_api.route("/members", methods=["GET"])
+@require_auth({"admin"})
+def list_members():
+    members = g.db.execute(
+        select(Membership, User)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.organization_id == g.principal.organization_id)
+        .order_by(User.email)
+    ).all()
+    return jsonify({"members": [serialize_member(membership, user) for membership, user in members]})
+
+
+@tenant_api.route("/members", methods=["POST"])
+@require_auth({"admin"})
+def grant_membership():
+    """Grant an existing active account access to this organization.
+
+    Account creation remains an explicit external identity/onboarding concern;
+    this route never accepts another person's password or exposes invite tokens.
+    """
+    body, error = request_object()
+    if error:
+        return error
+    if set(body) != {"email", "role"}:
+        return api_error("Request body must contain only email and role.", 422)
+    email = str(body["email"]).strip().lower() if isinstance(body["email"], str) else ""
+    role = body["role"]
+    if not EMAIL_PATTERN.fullmatch(email):
+        return api_error("email must be a valid address.", 422)
+    if not isinstance(role, str) or role not in MEMBERSHIP_ROLES:
+        return api_error(f"role must be one of {sorted(MEMBERSHIP_ROLES)}.", 422)
+    user = g.db.scalar(select(User).where(User.email == email))
+    if user is None:
+        return api_error("No active account exists for this email.", 404)
+    if not user.is_active:
+        return api_error("The account is inactive and cannot be granted access.", 422)
+    existing = g.db.scalar(select(Membership).where(
+        Membership.organization_id == g.principal.organization_id,
+        Membership.user_id == user.id,
+    ))
+    if existing is not None:
+        return api_error("This account already has a membership in the organization.", 409)
+    membership = Membership(
+        organization_id=g.principal.organization_id,
+        user_id=user.id,
+        role=role,
+    )
+    g.db.add(membership)
+    g.db.flush()
+    write_audit(
+        g.db,
+        organization_id=g.principal.organization_id,
+        actor_user_id=g.principal.user_id,
+        action="membership.granted",
+        entity_type="membership",
+        entity_id=membership.id,
+        payload={"user_id": user.id, "role": role},
+    )
+    try:
+        g.db.commit()
+    except Exception:
+        g.db.rollback()
+        raise
+    return jsonify(serialize_member(membership, user)), 201
+
+
+@tenant_api.route("/members/<user_id>", methods=["PATCH"])
+@require_auth({"admin"})
+def change_membership_role(user_id: str):
+    body, error = request_object()
+    if error:
+        return error
+    if set(body) != {"role"} or not isinstance(body["role"], str):
+        return api_error("Request body must contain only a string role.", 422)
+    role = body["role"]
+    if role not in MEMBERSHIP_ROLES:
+        return api_error(f"role must be one of {sorted(MEMBERSHIP_ROLES)}.", 422)
+    context = membership_context(g.db, user_id, g.principal.organization_id)
+    if context is None:
+        return api_error("Organization member was not found.", 404)
+    membership, user = context
+    if is_last_admin(g.db, membership, role):
+        return api_error("The organization must retain at least one admin.", 409)
+    previous_role = membership.role
+    membership.role = role
+    if previous_role != role:
+        write_audit(
+            g.db,
+            organization_id=g.principal.organization_id,
+            actor_user_id=g.principal.user_id,
+            action="membership.role_changed",
+            entity_type="membership",
+            entity_id=membership.id,
+            payload={"user_id": user.id, "previous_role": previous_role, "role": role},
+        )
+        try:
+            g.db.commit()
+        except Exception:
+            g.db.rollback()
+            raise
+    return jsonify(serialize_member(membership, user))
+
+
+@tenant_api.route("/members/<user_id>", methods=["DELETE"])
+@require_auth({"admin"})
+def revoke_membership(user_id: str):
+    context = membership_context(g.db, user_id, g.principal.organization_id)
+    if context is None:
+        return api_error("Organization member was not found.", 404)
+    membership, user = context
+    if is_last_admin(g.db, membership):
+        return api_error("The organization must retain at least one admin.", 409)
+    membership_id = membership.id
+    g.db.delete(membership)
+    write_audit(
+        g.db,
+        organization_id=g.principal.organization_id,
+        actor_user_id=g.principal.user_id,
+        action="membership.revoked",
+        entity_type="membership",
+        entity_id=membership_id,
+        payload={"user_id": user.id, "email": user.email},
+    )
+    try:
+        g.db.commit()
+    except Exception:
+        g.db.rollback()
+        raise
+    return "", 204
 
 
 @tenant_api.route("/ingestions/merchant-days", methods=["POST"])

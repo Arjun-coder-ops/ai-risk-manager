@@ -115,6 +115,9 @@ class TestTenantAuthAndIngestion:
         allowed_headers = response.headers["Access-Control-Allow-Headers"].lower()
         assert "authorization" in allowed_headers
         assert "idempotency-key" in allowed_headers
+        allowed_methods = response.headers["Access-Control-Allow-Methods"]
+        assert "PATCH" in allowed_methods
+        assert "DELETE" in allowed_methods
 
     def test_register_login_and_me(self, client):
         created = register(client, "one")
@@ -182,6 +185,77 @@ class TestTenantAuthAndIngestion:
         foreign_merchants = client.get("/api/v1/merchants", headers=auth_headers(org_b_token))
         assert foreign_merchants.status_code == 200
         assert foreign_merchants.get_json()["merchants"] == []
+
+
+class TestTenantMemberAdministration:
+    def test_admin_can_manage_existing_accounts_without_losing_last_admin(self, client):
+        owner = register(client, "member-owner")
+        owner_token = owner["access_token"]
+        candidate = register(client, "member-candidate")
+        candidate_own_token = candidate["access_token"]
+        candidate_user = candidate["user"]
+        owner_user = owner["user"]
+
+        initial_members = client.get("/api/v1/members", headers=auth_headers(owner_token))
+        assert initial_members.status_code == 200
+        assert [member["email"] for member in initial_members.get_json()["members"]] == [owner_user["email"]]
+
+        grant = client.post(
+            "/api/v1/members",
+            json={"email": candidate_user["email"], "role": "analyst"},
+            headers=auth_headers(owner_token),
+        )
+        assert grant.status_code == 201, grant.get_json()
+        assert grant.get_json()["user_id"] == candidate_user["id"]
+        assert grant.get_json()["role"] == "analyst"
+
+        duplicate = client.post(
+            "/api/v1/members",
+            json={"email": candidate_user["email"], "role": "analyst"},
+            headers=auth_headers(owner_token),
+        )
+        assert duplicate.status_code == 409
+
+        candidate_owner_login = client.post("/api/v1/auth/login", json={
+            "email": candidate_user["email"],
+            "password": "a-long-test-password-123",
+            "organization_slug": "test-org-member-owner",
+        })
+        assert candidate_owner_login.status_code == 200
+        candidate_owner_token = candidate_owner_login.get_json()["access_token"]
+        assert client.get("/api/v1/members", headers=auth_headers(candidate_owner_token)).status_code == 403
+
+        last_admin = client.patch(
+            f"/api/v1/members/{owner_user['id']}",
+            json={"role": "viewer"},
+            headers=auth_headers(owner_token),
+        )
+        assert last_admin.status_code == 409
+
+        promote = client.patch(
+            f"/api/v1/members/{candidate_user['id']}",
+            json={"role": "admin"},
+            headers=auth_headers(owner_token),
+        )
+        assert promote.status_code == 200
+        assert promote.get_json()["role"] == "admin"
+        # Membership is checked against the database on each request, so a
+        # pre-promotion token receives the new permission immediately.
+        assert client.get("/api/v1/members", headers=auth_headers(candidate_owner_token)).status_code == 200
+
+        foreign_update = client.patch(
+            f"/api/v1/members/{owner_user['id']}",
+            json={"role": "viewer"},
+            headers=auth_headers(candidate_own_token),
+        )
+        assert foreign_update.status_code == 404
+
+        revoke = client.delete(
+            f"/api/v1/members/{candidate_user['id']}",
+            headers=auth_headers(owner_token),
+        )
+        assert revoke.status_code == 204
+        assert client.get("/api/v1/auth/me", headers=auth_headers(candidate_owner_token)).status_code == 401
 
 
 class TestTenantRiskAssessmentAndCases:

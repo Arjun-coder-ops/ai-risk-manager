@@ -65,7 +65,7 @@ ALLOWED_ORIGINS = tuple(
 CORS(
     app,
     origins=ALLOWED_ORIGINS,
-    methods=["GET", "POST"],
+    methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
     supports_credentials=False,
 )
