@@ -48,6 +48,15 @@ DATA_PATH = os.path.join(BASE_DIR, "data", "raw", "merchant_daily_transactions.c
 AUDIT_LOG_PATH = os.path.join(BASE_DIR, "evaluation", "audit_log.jsonl")
 EVAL_RESULTS_PATH = os.path.join(BASE_DIR, "evaluation", "test_results.json")
 
+
+def env_flag(name: str, default: bool = False) -> bool:
+    """Read a conservative boolean environment flag."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_REQUEST_BYTES", "65536"))
 
@@ -70,6 +79,10 @@ CORS(
     supports_credentials=False,
 )
 app.config["JWT_SECRET"] = os.environ.get("JWT_SECRET")
+# Organization bootstrap is a local setup escape hatch, not public tenant
+# onboarding. It must be explicitly enabled only while creating the first
+# local administrator, then disabled again.
+app.config["ALLOW_BOOTSTRAP_REGISTRATION"] = env_flag("ALLOW_BOOTSTRAP_REGISTRATION")
 
 try:
     engine = RiskEngine()

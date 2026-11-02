@@ -226,6 +226,8 @@ def register():
     This is a development bootstrap route. Production provisioning should move
     behind an invitation or SSO workflow before public deployment.
     """
+    if not current_app.config.get("ALLOW_BOOTSTRAP_REGISTRATION", False):
+        return api_error("Bootstrap registration is disabled.", 404)
     body, error = request_object()
     if error:
         return error

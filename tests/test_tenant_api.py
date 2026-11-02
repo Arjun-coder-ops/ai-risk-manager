@@ -22,7 +22,11 @@ from backend.models import Membership, User  # noqa: E402
 def client(tmp_path):
     configure_database(f"sqlite:///{(tmp_path / 'tenant-api.db').as_posix()}")
     create_schema()
-    application.app.config.update(TESTING=True, JWT_SECRET="test-secret-that-is-longer-than-thirty-two-characters")
+    application.app.config.update(
+        TESTING=True,
+        JWT_SECRET="test-secret-that-is-longer-than-thirty-two-characters",
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
+    )
     with application.app.test_client() as test_client:
         yield test_client
     configure_database()
@@ -99,6 +103,17 @@ class DeterministicRiskEngine:
 
 
 class TestTenantAuthAndIngestion:
+    def test_bootstrap_registration_is_disabled_without_explicit_opt_in(self, client, monkeypatch):
+        monkeypatch.setitem(application.app.config, "ALLOW_BOOTSTRAP_REGISTRATION", False)
+        response = client.post("/api/v1/auth/register", json={
+            "email": "blocked@example.test",
+            "password": "a-long-test-password-123",
+            "organization_name": "Blocked Organization",
+            "organization_slug": "blocked-organization",
+        })
+        assert response.status_code == 404
+        assert response.get_json()["reason"] == "Bootstrap registration is disabled."
+
     def test_tenant_routes_require_a_valid_bearer_token(self, client):
         response = client.get("/api/v1/merchants")
         assert response.status_code == 401

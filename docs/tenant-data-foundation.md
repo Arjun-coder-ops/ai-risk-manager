@@ -50,9 +50,11 @@ not Flask's development server. It executes migrations before booting only to
 keep local Compose reproducible; deployed environments should run migrations
 as a dedicated release operation.
 
-The bootstrap endpoint `POST /api/v1/auth/register` exists for local
-development. Do not expose it publicly; production onboarding must use an
-invitation or enterprise identity-provider flow.
+The bootstrap endpoint `POST /api/v1/auth/register` is disabled unless
+`ALLOW_BOOTSTRAP_REGISTRATION=true` is explicitly set. Use it only long enough
+to create an initial local administrator, then set it back to `false` and
+restart the service. Do not expose it publicly; production onboarding must use
+an invitation or enterprise identity-provider flow.
 
 ## Current authenticated API
 

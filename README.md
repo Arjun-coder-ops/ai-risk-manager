@@ -269,6 +269,8 @@ The authenticated, PostgreSQL-ready API and investigation workflow are documente
 separate from the legacy synthetic-demo endpoints, which must never receive
 tenant data. Copy `.env.example` to `.env`, replace its placeholders, and run
 `docker compose up --build` for local PostgreSQL-backed development.
+`ALLOW_BOOTSTRAP_REGISTRATION` defaults to `false`; enable it temporarily only
+to create an initial local administrator.
 
 ## Limitations
 
