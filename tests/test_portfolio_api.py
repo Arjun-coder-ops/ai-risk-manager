@@ -2,13 +2,12 @@
 
 import sys
 import os
-import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "model"))
 
 import pytest
-from app import app
+from app import app, get_raw_data
 
 
 @pytest.fixture
@@ -29,7 +28,10 @@ class TestPortfolioAPISingleDate:
         assert data['status'] == 'ok'
         assert data['date'] == '2026-05-31'
         assert 'merchants' in data
-        assert len(data['merchants']) == 150
+        expected_merchants = get_raw_data().loc[
+            get_raw_data()["date"] == "2026-05-31", "merchant_id"
+        ].nunique()
+        assert len(data['merchants']) == expected_merchants
     
     def test_single_date_response_structure(self, client):
         """Single-date response has expected fields per merchant."""

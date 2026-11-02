@@ -302,7 +302,10 @@ class TestPortfolioDateRange:
         featured_target = featured[featured["date"] == target_date]
         
         results = engine.score_portfolio_day(raw_target, featured_target, target_date)
-        assert len(results) == 150  # All merchants present
+        # Lifecycle churn and missing observations mean a portfolio date is
+        # the merchants actually observed on that date, not a fixed universe.
+        assert len(results) == raw_target["merchant_id"].nunique()
+        assert {result.merchant_id for result in results} == set(raw_target["merchant_id"])
         assert all(r.date == target_date for r in results)
         
         # Ranking still correct
@@ -324,15 +327,28 @@ class TestPortfolioDateRange:
         
         # Should have results for all 3 dates
         assert len(all_results) == 3
-        # Each date should have 150 merchants
+        # Each date scores every observed merchant, even when lifecycle or
+        # missing-record simulation changes the date's population.
         for date_str, results in all_results:
-            assert len(results) == 150
+            expected = raw_df_str_date.loc[
+                raw_df_str_date["date"] == date_str, "merchant_id"
+            ].nunique()
+            assert len(results) == expected
     
     def test_merchant_consistency_across_dates(self, engine, raw_df_str_date):
         """A merchant's score is consistent whether queried in single-date or range mode."""
         featured = build_features(raw_df_str_date)
-        merchant_id = "M0050"
         target_date = "2026-05-31"
+        comparison_dates = ["2026-05-30", target_date]
+        merchant_ids_on_all_dates = set(raw_df_str_date.loc[
+            raw_df_str_date["date"] == comparison_dates[0], "merchant_id"
+        ])
+        for date_str in comparison_dates[1:]:
+            merchant_ids_on_all_dates &= set(raw_df_str_date.loc[
+                raw_df_str_date["date"] == date_str, "merchant_id"
+            ])
+        assert merchant_ids_on_all_dates
+        merchant_id = sorted(merchant_ids_on_all_dates)[0]
         
         # Single date
         raw_single = raw_df_str_date[raw_df_str_date["date"] == target_date]
@@ -341,8 +357,8 @@ class TestPortfolioDateRange:
         single_result = [r for r in result_single if r.merchant_id == merchant_id][0]
         
         # Date range containing same date
-        raw_range = raw_df_str_date[raw_df_str_date["date"].isin(["2026-05-30", "2026-05-31"])]
-        featured_range = featured[featured["date"].isin(["2026-05-30", "2026-05-31"])]
+        raw_range = raw_df_str_date[raw_df_str_date["date"].isin(comparison_dates)]
+        featured_range = featured[featured["date"].isin(comparison_dates)]
         
         # Query on the target date
         raw_target = raw_range[raw_range["date"] == target_date]

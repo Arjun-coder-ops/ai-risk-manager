@@ -81,22 +81,25 @@ prototype this size). Frontend: a single-page dashboard
 public dataset or test-mode API of historical merchant-level transaction
 streams with fraud-spike labels, and generic public card-fraud datasets are
 transaction-level, not merchant-day-level, so they don't fit this problem
-shape. We generated 150 synthetic merchants across 3 archetypes
-(small/medium/large, weighted 55/32/13%) over 180 days each (27,000
-merchant-day rows), with realistic weekly seasonality, per-merchant growth
-trends, and Poisson/Gamma-distributed transaction counts and amounts.
+shape. The configurable `synthetic-simulator-v2` generates small, medium, and
+large merchant profiles over 180 calendar days. Its label-independent behaviour
+stage includes per-merchant weekly/monthly seasonality, growth and decline,
+cold starts, churn, quiet periods, legitimate campaign/holiday demand, missing
+observations, and delayed-record metadata. A separate injection stage then
+adds six kinds of simulated fraud spike against each merchant's own baseline.
 
-Fraud-spike windows (2-7 days, randomized severity from subtle to obvious,
-one of 4 spike archetypes: volume burst, failed-payment burst, new-device
-velocity, amount anomaly) are injected against **each merchant's own
-baseline**, not a global rule, and severity is randomized so spikes are not
-trivially separable. Overall positive rate: **7.0%** of merchant-days,
-reflecting realistic class imbalance for a rare-event detector.
+Legitimate campaign demand intentionally resembles some anomaly signals but
+retains a negative label. This makes the task less trivially separable, but it
+does **not** make the simulation representative of real false positives.
+Read the full ground-truth contract, configurable parameters, and boundaries
+in [`docs/synthetic-data-provenance.md`](docs/synthetic-data-provenance.md).
 
 - Source: synthetic (`model/generate_data.py`, seed=42, fully reproducible)
-- Size: 27,000 merchant-day rows, 150 merchants, 180 days (2026-01-01 to 2026-06-29)
+- Size and class distribution: generated values are recorded in the committed
+  offline-only `data/raw/simulation_manifest.json`
 - Features: 8 engineered signals, described in `model/features.py`
-- Class distribution: 7.0% positive overall (train 7.9%, val 7.1%, test 6.2%)
+- Class distribution: 7.02% positive overall (train 7.48%, validation 6.86%,
+  test 7.32%)
 - **Limitation**: this is a simulation of plausible merchant behaviour, not
   real Razorpay data. Absolute metric values should be read as evidence
   that the pipeline and methodology work correctly, not as a claim about
@@ -104,38 +107,38 @@ reflecting realistic class imbalance for a rare-event detector.
 
 ## Evaluation (actual measured results on the held-out test set)
 
-Test set: 6,750 merchant-days, 2026-05-16 → 2026-06-29 — dates strictly
+Test set: 6,157 merchant-days, 2026-05-16 → 2026-06-29 — dates strictly
 after training and validation, touched exactly once.
 
 | Metric | Value |
 |---|---|
-| ROC-AUC | **0.9825** |
-| PR-AUC (appropriate for 6.2% positive rate) | **0.9555** |
+| ROC-AUC | **0.9838** |
+| PR-AUC (appropriate for 7.32% positive rate) | **0.9438** |
 
-**HIGH tier** (score ≥ 0.48, direct merchant alert, validation-tuned for precision ≥ 0.95):
-
-| | |
-|---|---|
-| Precision | 0.9497 |
-| Recall | 0.9065 |
-| F1 | 0.9276 |
-| False positive rate | 0.32% |
-| Confusion matrix | TP 378, FP 20, FN 39, TN 6313 |
-| Estimated cost | ₹9,000 (FP) + ₹312,000 (FN) = **₹321,000** |
-
-**REVIEW tier** (score ≥ 0.05, flag for analyst, validation-tuned to minimize total business cost):
+**HIGH tier** (score ≥ 0.64, direct merchant alert, validation-tuned for precision ≥ 0.95):
 
 | | |
 |---|---|
-| Precision | 0.7011 |
-| Recall | 0.9448 |
-| F1 | 0.8049 |
-| False positive rate | 2.65% |
-| Confusion matrix | TP 394, FP 168, FN 23, TN 6165 |
-| Estimated cost | ₹75,600 (FP) + ₹184,000 (FN) = **₹259,600** |
+| Precision | 0.9594 |
+| Recall | 0.8381 |
+| F1 | 0.8947 |
+| False positive rate | 0.28% |
+| Confusion matrix | TP 378, FP 16, FN 73, TN 5690 |
+| Estimated cost | ₹7,200 (FP) + ₹584,000 (FN) = **₹591,200** |
 
-Model comparison on validation (PR-AUC): Logistic Regression 0.790, Random
-Forest 0.944, **Gradient Boosting 0.963 (selected)**.
+**REVIEW tier** (score ≥ 0.07, flag for analyst, validation-tuned to minimize total business cost):
+
+| | |
+|---|---|
+| Precision | 0.7331 |
+| Recall | 0.9379 |
+| F1 | 0.8230 |
+| False positive rate | 2.70% |
+| Confusion matrix | TP 423, FP 154, FN 28, TN 5552 |
+| Estimated cost | ₹69,300 (FP) + ₹224,000 (FN) = **₹293,300** |
+
+Model comparison on validation (PR-AUC): Logistic Regression 0.757, Random
+Forest 0.884, **Gradient Boosting 0.928 (selected)**.
 
 ## False-Positive Cost Model
 

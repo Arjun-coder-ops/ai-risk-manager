@@ -176,6 +176,11 @@ class TestApiAndFrontendSecurity:
         points = client.get("/api/risk/timeseries/M0000").get_json()["points"]
         assert points and all("actual_label" not in point for point in points)
 
+        # The simulator event manifest includes offline-only ground truth and
+        # must never be exposed as a web-served asset.
+        manifest = client.get("/data/raw/simulation_manifest.json")
+        assert manifest.status_code == 404
+
     def test_frontend_uses_no_innerhtml_sink_for_dynamic_api_data(self):
         frontend = FRONTEND_PATH.read_text(encoding="utf-8")
         assert "innerHTML" not in frontend
