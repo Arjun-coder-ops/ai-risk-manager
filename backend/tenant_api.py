@@ -6,9 +6,10 @@ compatibility. New tenant data must use this authenticated ``/api/v1`` API.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 import hashlib
 import json
+import os
 import re
 
 import pandas as pd
@@ -21,6 +22,8 @@ from backend.database import get_session
 from backend.models import (
     AuditEvent,
     IngestionBatch,
+    InvestigationCase,
+    InvestigationEvent,
     Membership,
     Merchant,
     MerchantDayObservation,
@@ -28,13 +31,26 @@ from backend.models import (
     RiskAssessment,
     User,
 )
-from model.validation import ObservationValidationError, normalize_date, validate_observations
+from model.validation import (
+    ObservationValidationError,
+    validate_observations,
+    validate_request_identifiers,
+)
 
 
 tenant_api = Blueprint("tenant_api", __name__, url_prefix="/api/v1")
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 ORG_SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 IDEMPOTENCY_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
+CASE_STATUSES = frozenset({"OPEN", "IN_REVIEW", "ESCALATED", "RESOLVED", "FALSE_POSITIVE"})
+CASE_TRANSITIONS = {
+    "OPEN": frozenset({"IN_REVIEW", "ESCALATED", "RESOLVED", "FALSE_POSITIVE"}),
+    "IN_REVIEW": frozenset({"ESCALATED", "RESOLVED", "FALSE_POSITIVE"}),
+    "ESCALATED": frozenset({"IN_REVIEW", "RESOLVED", "FALSE_POSITIVE"}),
+    "RESOLVED": frozenset(),
+    "FALSE_POSITIVE": frozenset(),
+}
+AUTO_CASE_RISK_LEVELS = frozenset({"HIGH", "REVIEW"})
 
 
 def api_error(reason: str, status: int):
@@ -69,6 +85,77 @@ def serialize_batch(batch: IngestionBatch, replayed: bool = False) -> dict:
         "created_at": batch.created_at.isoformat(),
         "idempotent_replay": replayed,
     }
+
+
+def serialize_assessment(
+    assessment: RiskAssessment,
+    merchant: Merchant,
+    observation: MerchantDayObservation,
+    *,
+    case: InvestigationCase | None = None,
+    replayed: bool = False,
+) -> dict:
+    return {
+        "id": assessment.id,
+        "merchant_id": merchant.external_id,
+        "date": observation.observation_date.isoformat(),
+        "status": assessment.status,
+        "risk_score": assessment.risk_score,
+        "risk_level": assessment.risk_level,
+        "model_version": assessment.model_version,
+        "policy_version": assessment.policy_version,
+        "evidence": assessment.evidence,
+        "case_id": case.id if case is not None else None,
+        "idempotent_replay": replayed,
+        "created_at": assessment.created_at.isoformat(),
+    }
+
+
+def serialize_case(case: InvestigationCase, merchant: Merchant, assessment: RiskAssessment) -> dict:
+    return {
+        "id": case.id,
+        "merchant_id": merchant.external_id,
+        "risk_assessment_id": assessment.id,
+        "risk_score": assessment.risk_score,
+        "risk_level": assessment.risk_level,
+        "model_version": assessment.model_version,
+        "policy_version": assessment.policy_version,
+        "status": case.status,
+        "priority": case.priority,
+        "assigned_user_id": case.assigned_user_id,
+        "final_decision": case.final_decision,
+        "resolved_at": case.resolved_at.isoformat() if case.resolved_at else None,
+        "created_at": case.created_at.isoformat(),
+    }
+
+
+def case_context(session, case_id: str, organization_id: str):
+    """Fetch a case and all display fields through organization-scoped joins."""
+    return session.execute(
+        select(InvestigationCase, Merchant, RiskAssessment)
+        .join(Merchant, Merchant.id == InvestigationCase.merchant_id)
+        .join(RiskAssessment, RiskAssessment.id == InvestigationCase.risk_assessment_id)
+        .where(
+            InvestigationCase.id == case_id,
+            InvestigationCase.organization_id == organization_id,
+            Merchant.organization_id == organization_id,
+            RiskAssessment.organization_id == organization_id,
+        )
+    ).one_or_none()
+
+
+def assessment_context(session, assessment_id: str, organization_id: str):
+    return session.execute(
+        select(RiskAssessment, Merchant, MerchantDayObservation)
+        .join(MerchantDayObservation, MerchantDayObservation.id == RiskAssessment.merchant_day_observation_id)
+        .join(Merchant, Merchant.id == MerchantDayObservation.merchant_id)
+        .where(
+            RiskAssessment.id == assessment_id,
+            RiskAssessment.organization_id == organization_id,
+            MerchantDayObservation.organization_id == organization_id,
+            Merchant.organization_id == organization_id,
+        )
+    ).one_or_none()
 
 
 @tenant_api.route("/auth/register", methods=["POST"])
@@ -290,6 +377,319 @@ def list_merchants():
         {"id": merchant.id, "merchant_id": merchant.external_id, "display_name": merchant.display_name}
         for merchant in merchants
     ]})
+
+
+@tenant_api.route("/risk-assessments", methods=["POST"])
+@require_auth({"admin", "analyst"})
+def create_risk_assessment():
+    """Score a persisted merchant-day observation and retain the decision trace.
+
+    This endpoint deliberately reads only tenant-scoped database observations;
+    it never falls back to the synthetic CSV used by legacy demo endpoints.
+    """
+    body, error = request_object()
+    if error:
+        return error
+    unexpected = sorted(set(body) - {"merchant_id", "date"})
+    if unexpected:
+        return api_error(f"Unsupported request fields: {unexpected}", 422)
+    try:
+        merchant_id, target_date = validate_request_identifiers(body.get("merchant_id"), body.get("date"))
+    except ObservationValidationError as exc:
+        return api_error(f"Invalid request: {exc}", 422)
+
+    session = g.db
+    merchant = session.scalar(select(Merchant).where(
+        Merchant.organization_id == g.principal.organization_id,
+        Merchant.external_id == merchant_id,
+    ))
+    if merchant is None:
+        return api_error("Merchant was not found.", 404)
+    observation = session.scalar(select(MerchantDayObservation).where(
+        MerchantDayObservation.organization_id == g.principal.organization_id,
+        MerchantDayObservation.merchant_id == merchant.id,
+        MerchantDayObservation.observation_date == date.fromisoformat(target_date),
+    ))
+    if observation is None:
+        return api_error("Merchant-day observation was not found.", 404)
+
+    engine = current_app.extensions.get("risk_engine")
+    if engine is None:
+        return api_error("Risk engine is unavailable.", 503)
+
+    history_rows = session.scalars(select(MerchantDayObservation).where(
+        MerchantDayObservation.organization_id == g.principal.organization_id,
+        MerchantDayObservation.merchant_id == merchant.id,
+    ).order_by(MerchantDayObservation.observation_date)).all()
+    history = pd.DataFrame([{
+        "merchant_id": merchant.external_id,
+        "date": row.observation_date.isoformat(),
+        "n_transactions": row.n_transactions,
+        "n_failed": row.n_failed,
+        "avg_amount": row.avg_amount,
+        "amount_std": row.amount_std,
+        "n_unique_users": row.n_unique_users,
+        "n_new_users": row.n_new_users,
+        "n_devices": row.n_devices,
+        "distinct_regions_seen": row.distinct_regions_seen,
+    } for row in history_rows])
+    try:
+        result = engine.score_merchant_day(history, target_date, merchant_id)
+    except Exception:
+        current_app.logger.exception("Tenant-scoped risk scoring failed")
+        return api_error("Risk scoring could not be completed.", 503)
+
+    model_version = str(getattr(result, "model_version", None) or getattr(engine, "model_version", "unknown"))
+    policy_version = os.environ.get("RISK_POLICY_VERSION", "policy-v1")
+    existing = session.scalar(select(RiskAssessment).where(
+        RiskAssessment.organization_id == g.principal.organization_id,
+        RiskAssessment.merchant_day_observation_id == observation.id,
+        RiskAssessment.model_version == model_version,
+        RiskAssessment.policy_version == policy_version,
+    ))
+    if existing is not None:
+        existing_case = session.scalar(select(InvestigationCase).where(
+            InvestigationCase.organization_id == g.principal.organization_id,
+            InvestigationCase.risk_assessment_id == existing.id,
+        ))
+        payload = serialize_assessment(existing, merchant, observation, case=existing_case, replayed=True)
+        return jsonify(payload)
+
+    status = str(getattr(result, "status", "error"))
+    assessment = RiskAssessment(
+        organization_id=g.principal.organization_id,
+        merchant_day_observation_id=observation.id,
+        model_version=model_version,
+        policy_version=policy_version,
+        risk_score=getattr(result, "risk_score", None),
+        risk_level=getattr(result, "risk_level", None),
+        status=status,
+        evidence=list(getattr(result, "signals", []) or []),
+    )
+    session.add(assessment)
+    session.flush()
+
+    case = None
+    if status == "ok" and assessment.risk_level in AUTO_CASE_RISK_LEVELS:
+        case = InvestigationCase(
+            organization_id=g.principal.organization_id,
+            merchant_id=merchant.id,
+            risk_assessment_id=assessment.id,
+            priority="HIGH" if assessment.risk_level == "HIGH" else "NORMAL",
+        )
+        session.add(case)
+        session.flush()
+        session.add(InvestigationEvent(
+            organization_id=g.principal.organization_id,
+            case_id=case.id,
+            actor_user_id=g.principal.user_id,
+            event_type="case.created_from_risk_assessment",
+            payload={"risk_level": assessment.risk_level, "risk_score": assessment.risk_score},
+        ))
+
+    write_audit(
+        session,
+        organization_id=g.principal.organization_id,
+        actor_user_id=g.principal.user_id,
+        action="risk_assessment.created",
+        entity_type="risk_assessment",
+        entity_id=assessment.id,
+        payload={
+            "merchant_id": merchant.external_id,
+            "date": target_date,
+            "status": assessment.status,
+            "risk_level": assessment.risk_level,
+            "model_version": assessment.model_version,
+            "policy_version": assessment.policy_version,
+            "case_id": case.id if case else None,
+        },
+    )
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    payload = serialize_assessment(assessment, merchant, observation, case=case)
+    payload["recommended_action"] = getattr(result, "recommended_action", None)
+    payload["reason"] = getattr(result, "reason", None)
+    return jsonify(payload), 201
+
+
+@tenant_api.route("/risk-assessments/<assessment_id>", methods=["GET"])
+@require_auth()
+def get_risk_assessment(assessment_id: str):
+    context = assessment_context(g.db, assessment_id, g.principal.organization_id)
+    if context is None:
+        return api_error("Risk assessment was not found.", 404)
+    assessment, merchant, observation = context
+    case = g.db.scalar(select(InvestigationCase).where(
+        InvestigationCase.organization_id == g.principal.organization_id,
+        InvestigationCase.risk_assessment_id == assessment.id,
+    ))
+    return jsonify(serialize_assessment(assessment, merchant, observation, case=case))
+
+
+@tenant_api.route("/cases", methods=["GET"])
+@require_auth()
+def list_cases():
+    requested_status = request.args.get("status")
+    if requested_status is not None:
+        requested_status = requested_status.upper()
+        if requested_status not in CASE_STATUSES:
+            return api_error("status must be a valid case status.", 400)
+    try:
+        limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+    except ValueError:
+        return api_error("limit must be an integer between 1 and 100.", 400)
+    query = (
+        select(InvestigationCase, Merchant, RiskAssessment)
+        .join(Merchant, Merchant.id == InvestigationCase.merchant_id)
+        .join(RiskAssessment, RiskAssessment.id == InvestigationCase.risk_assessment_id)
+        .where(
+            InvestigationCase.organization_id == g.principal.organization_id,
+            Merchant.organization_id == g.principal.organization_id,
+            RiskAssessment.organization_id == g.principal.organization_id,
+        )
+        .order_by(InvestigationCase.created_at.desc())
+        .limit(limit)
+    )
+    if requested_status:
+        query = query.where(InvestigationCase.status == requested_status)
+    contexts = g.db.execute(query).all()
+    return jsonify({"cases": [serialize_case(case, merchant, assessment) for case, merchant, assessment in contexts]})
+
+
+@tenant_api.route("/cases/<case_id>", methods=["GET"])
+@require_auth()
+def get_case(case_id: str):
+    context = case_context(g.db, case_id, g.principal.organization_id)
+    if context is None:
+        return api_error("Investigation case was not found.", 404)
+    case, merchant, assessment = context
+    return jsonify(serialize_case(case, merchant, assessment))
+
+
+@tenant_api.route("/cases/<case_id>/events", methods=["GET"])
+@require_auth()
+def list_case_events(case_id: str):
+    if case_context(g.db, case_id, g.principal.organization_id) is None:
+        return api_error("Investigation case was not found.", 404)
+    events = g.db.scalars(select(InvestigationEvent).where(
+        InvestigationEvent.organization_id == g.principal.organization_id,
+        InvestigationEvent.case_id == case_id,
+    ).order_by(InvestigationEvent.created_at)).all()
+    return jsonify({"events": [{
+        "id": event.id,
+        "event_type": event.event_type,
+        "actor_user_id": event.actor_user_id,
+        "payload": event.payload,
+        "created_at": event.created_at.isoformat(),
+    } for event in events]})
+
+
+@tenant_api.route("/cases/<case_id>/assignment", methods=["POST"])
+@require_auth({"admin", "analyst"})
+def assign_case(case_id: str):
+    body, error = request_object()
+    if error:
+        return error
+    if set(body) != {"assigned_user_id"}:
+        return api_error("Request body must contain only assigned_user_id.", 422)
+    assigned_user_id = body["assigned_user_id"]
+    if assigned_user_id is not None and (not isinstance(assigned_user_id, str) or not assigned_user_id.strip()):
+        return api_error("assigned_user_id must be a non-empty string or null.", 422)
+    context = case_context(g.db, case_id, g.principal.organization_id)
+    if context is None:
+        return api_error("Investigation case was not found.", 404)
+    case, merchant, assessment = context
+    if g.principal.role != "admin" and assigned_user_id not in (None, g.principal.user_id):
+        return api_error("Analysts may only assign a case to themselves or unassign it.", 403)
+    if assigned_user_id is not None:
+        assignee = g.db.scalar(select(Membership).where(
+            Membership.organization_id == g.principal.organization_id,
+            Membership.user_id == assigned_user_id,
+        ))
+        if assignee is None:
+            return api_error("Assignee must have an active membership in this organization.", 422)
+    previous_assignee = case.assigned_user_id
+    case.assigned_user_id = assigned_user_id
+    g.db.add(InvestigationEvent(
+        organization_id=g.principal.organization_id,
+        case_id=case.id,
+        actor_user_id=g.principal.user_id,
+        event_type="case.assignment_changed",
+        payload={"previous_assigned_user_id": previous_assignee, "assigned_user_id": assigned_user_id},
+    ))
+    write_audit(g.db, organization_id=g.principal.organization_id, actor_user_id=g.principal.user_id,
+                action="case.assignment_changed", entity_type="investigation_case", entity_id=case.id,
+                payload={"assigned_user_id": assigned_user_id})
+    try:
+        g.db.commit()
+    except Exception:
+        g.db.rollback()
+        raise
+    return jsonify(serialize_case(case, merchant, assessment))
+
+
+@tenant_api.route("/cases/<case_id>/transitions", methods=["POST"])
+@require_auth({"admin", "analyst"})
+def transition_case(case_id: str):
+    body, error = request_object()
+    if error:
+        return error
+    unexpected = sorted(set(body) - {"status", "note", "final_decision"})
+    if unexpected or "status" not in body:
+        return api_error("Request body must contain status and may include note and final_decision only.", 422)
+    if not isinstance(body["status"], str):
+        return api_error("status must be a string.", 422)
+    next_status = body["status"].upper()
+    if next_status not in CASE_STATUSES:
+        return api_error("status must be a valid case status.", 422)
+    note = body.get("note")
+    if note is not None and (not isinstance(note, str) or len(note.strip()) > 2000):
+        return api_error("note must be a string of at most 2000 characters.", 422)
+    final_decision = body.get("final_decision")
+    terminal = next_status in {"RESOLVED", "FALSE_POSITIVE"}
+    if terminal:
+        if not isinstance(final_decision, str) or not 1 <= len(final_decision.strip()) <= 64:
+            return api_error("Terminal transitions require final_decision of 1-64 characters.", 422)
+        if not isinstance(note, str) or not note.strip():
+            return api_error("Terminal transitions require a non-empty note.", 422)
+    elif final_decision is not None:
+        return api_error("final_decision is allowed only for terminal transitions.", 422)
+
+    context = case_context(g.db, case_id, g.principal.organization_id)
+    if context is None:
+        return api_error("Investigation case was not found.", 404)
+    case, merchant, assessment = context
+    if next_status not in CASE_TRANSITIONS.get(case.status, frozenset()):
+        return api_error(f"Cannot transition a {case.status} case to {next_status}.", 409)
+    previous_status = case.status
+    case.status = next_status
+    if terminal:
+        case.final_decision = final_decision.strip()
+        case.resolved_at = datetime.now(timezone.utc)
+    g.db.add(InvestigationEvent(
+        organization_id=g.principal.organization_id,
+        case_id=case.id,
+        actor_user_id=g.principal.user_id,
+        event_type="case.transitioned",
+        payload={
+            "previous_status": previous_status,
+            "status": next_status,
+            "note": note.strip() if isinstance(note, str) else None,
+            "final_decision": case.final_decision if terminal else None,
+        },
+    ))
+    write_audit(g.db, organization_id=g.principal.organization_id, actor_user_id=g.principal.user_id,
+                action="case.transitioned", entity_type="investigation_case", entity_id=case.id,
+                payload={"previous_status": previous_status, "status": next_status})
+    try:
+        g.db.commit()
+    except Exception:
+        g.db.rollback()
+        raise
+    return jsonify(serialize_case(case, merchant, assessment))
 
 
 @tenant_api.route("/audit-events", methods=["GET"])

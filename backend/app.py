@@ -78,6 +78,11 @@ except RiskEngineError as e:
     engine = None
     ENGINE_LOAD_ERROR = str(e)
 
+# Keep the model dependency explicit for the authenticated tenant API.  This
+# also makes it possible for integration tests to substitute a deterministic
+# engine without touching module globals.
+app.extensions["risk_engine"] = engine
+
 # Authenticated, durable tenant APIs. Legacy /api/risk routes remain an
 # explicitly synthetic backwards-compatible demonstration surface.
 app.register_blueprint(tenant_api)

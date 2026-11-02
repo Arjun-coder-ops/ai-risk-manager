@@ -201,7 +201,9 @@ history returns:
   merchant of fraud or add unverified claims, and it falls back to a
   deterministic template if unavailable — see `model/llm_explainer.py`.
 - CORS is allowlisted through `ALLOWED_ORIGINS`; it is not a substitute for
-  authentication or tenant isolation, which remain future work.
+  authentication or authorization. Tenant routes use bearer authentication,
+  RBAC, and organization-scoped database queries; the legacy demo routes do
+  not and must never receive tenant data.
 
 ## Running Locally
 
@@ -246,11 +248,12 @@ $env:ALLOWED_ORIGINS = "http://localhost:3000"
 python backend/app.py
 ```
 
-**CORS is not authentication or authorization.** This Flask application is
-currently a synthetic-data demonstration and must not be deployed with
-tenant or personal data until authentication, RBAC, and tenant isolation are
-implemented. The dashboard API deliberately omits simulator ground-truth
-labels; they remain available only to offline evaluation code.
+**CORS is not authentication or authorization.** The authenticated `/api/v1`
+surface enforces bearer authentication, RBAC, and organization-scoped queries.
+The legacy `/api/risk` and static dashboard routes remain synthetic-data demo
+surfaces and must never receive tenant or personal data. The dashboard API
+deliberately omits simulator ground-truth labels; they remain available only to
+offline evaluation code.
 
 ## Reproducibility
 
@@ -259,9 +262,9 @@ Use Python 3.10 and run the pipeline in a clean virtual environment. The
 baseline reproduction record, commands, artifact hashes, and measured output
 are documented in [`docs/baseline-evidence.md`](docs/baseline-evidence.md).
 
-## Durable tenant API (Milestone 2A)
+## Durable tenant API (Milestones 2A–2B)
 
-The authenticated, PostgreSQL-ready API is documented in
+The authenticated, PostgreSQL-ready API and investigation workflow are documented in
 [`docs/tenant-data-foundation.md`](docs/tenant-data-foundation.md). It is
 separate from the legacy synthetic-demo endpoints, which must never receive
 tenant data. Copy `.env.example` to `.env`, replace its placeholders, and run

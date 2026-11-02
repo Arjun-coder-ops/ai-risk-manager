@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 import os
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -56,6 +57,26 @@ def observations(merchant_id: str = "M0001", days: int = 8):
         "n_devices": 70,
         "distinct_regions_seen": 2,
     } for offset in range(days)]
+
+
+class DeterministicRiskEngine:
+    """Keep tenant API tests independent from serialized model artifacts."""
+
+    model_version = "test-model-v1"
+
+    def score_merchant_day(self, history, target_date, merchant_id):
+        assert len(history) >= 1
+        return SimpleNamespace(
+            status="ok",
+            merchant_id=merchant_id,
+            date=target_date,
+            risk_score=0.91,
+            risk_level="HIGH",
+            signals=[{"feature": "txn_volume_zscore", "impact": "Strongly increased risk"}],
+            recommended_action="Open an investigation.",
+            model_version=self.model_version,
+            reason=None,
+        )
 
 
 class TestTenantAuthAndIngestion:
@@ -142,3 +163,128 @@ class TestTenantAuthAndIngestion:
         foreign_merchants = client.get("/api/v1/merchants", headers=auth_headers(org_b_token))
         assert foreign_merchants.status_code == 200
         assert foreign_merchants.get_json()["merchants"] == []
+
+
+class TestTenantRiskAssessmentAndCases:
+    def _create_case(self, client, monkeypatch, suffix: str = "case"):
+        monkeypatch.setitem(application.app.extensions, "risk_engine", DeterministicRiskEngine())
+        token = register(client, suffix)["access_token"]
+        ingestion = client.post(
+            "/api/v1/ingestions/merchant-days",
+            json={"observations": observations("M7001")},
+            headers=auth_headers(token, f"batch-{suffix}-0001"),
+        )
+        assert ingestion.status_code == 201, ingestion.get_json()
+        score = client.post(
+            "/api/v1/risk-assessments",
+            json={"merchant_id": "M7001", "date": "2026-01-08"},
+            headers=auth_headers(token),
+        )
+        assert score.status_code == 201, score.get_json()
+        return token, score.get_json()
+
+    def test_scoring_is_tenant_scoped_persistent_and_replay_safe(self, client, monkeypatch):
+        token, assessment = self._create_case(client, monkeypatch, "score")
+        assert assessment["risk_level"] == "HIGH"
+        assert assessment["risk_score"] == 0.91
+        assert assessment["case_id"]
+        assert assessment["evidence"][0]["feature"] == "txn_volume_zscore"
+
+        replay = client.post(
+            "/api/v1/risk-assessments",
+            json={"merchant_id": "M7001", "date": "2026-01-08"},
+            headers=auth_headers(token),
+        )
+        assert replay.status_code == 200
+        assert replay.get_json()["id"] == assessment["id"]
+        assert replay.get_json()["idempotent_replay"] is True
+
+        fetched = client.get(f"/api/v1/risk-assessments/{assessment['id']}", headers=auth_headers(token))
+        assert fetched.status_code == 200
+        assert fetched.get_json()["case_id"] == assessment["case_id"]
+        cases = client.get("/api/v1/cases?status=OPEN", headers=auth_headers(token))
+        assert cases.status_code == 200
+        assert [item["id"] for item in cases.get_json()["cases"]] == [assessment["case_id"]]
+
+        other_token = register(client, "score-other")["access_token"]
+        assert client.get(f"/api/v1/risk-assessments/{assessment['id']}", headers=auth_headers(other_token)).status_code == 404
+        assert client.get(f"/api/v1/cases/{assessment['case_id']}", headers=auth_headers(other_token)).status_code == 404
+
+    def test_case_assignment_transitions_and_event_history(self, client, monkeypatch):
+        token, assessment = self._create_case(client, monkeypatch, "workflow")
+        me = client.get("/api/v1/auth/me", headers=auth_headers(token)).get_json()
+        case_id = assessment["case_id"]
+
+        assignment = client.post(
+            f"/api/v1/cases/{case_id}/assignment",
+            json={"assigned_user_id": me["user_id"]},
+            headers=auth_headers(token),
+        )
+        assert assignment.status_code == 200
+        assert assignment.get_json()["assigned_user_id"] == me["user_id"]
+
+        in_review = client.post(
+            f"/api/v1/cases/{case_id}/transitions",
+            json={"status": "IN_REVIEW", "note": "Examining the unexpected volume."},
+            headers=auth_headers(token),
+        )
+        assert in_review.status_code == 200
+        assert in_review.get_json()["status"] == "IN_REVIEW"
+
+        missing_evidence = client.post(
+            f"/api/v1/cases/{case_id}/transitions",
+            json={"status": "RESOLVED"},
+            headers=auth_headers(token),
+        )
+        assert missing_evidence.status_code == 422
+
+        resolved = client.post(
+            f"/api/v1/cases/{case_id}/transitions",
+            json={"status": "RESOLVED", "final_decision": "confirmed_fraud", "note": "Verified by the analyst."},
+            headers=auth_headers(token),
+        )
+        assert resolved.status_code == 200
+        assert resolved.get_json()["final_decision"] == "confirmed_fraud"
+        assert resolved.get_json()["resolved_at"]
+
+        events = client.get(f"/api/v1/cases/{case_id}/events", headers=auth_headers(token))
+        assert events.status_code == 200
+        assert [event["event_type"] for event in events.get_json()["events"]] == [
+            "case.created_from_risk_assessment",
+            "case.assignment_changed",
+            "case.transitioned",
+            "case.transitioned",
+        ]
+
+    def test_risk_assessment_rejects_unknown_fields_and_unknown_merchant(self, client, monkeypatch):
+        monkeypatch.setitem(application.app.extensions, "risk_engine", DeterministicRiskEngine())
+        token = register(client, "assessment-validation")["access_token"]
+        extra_field = client.post(
+            "/api/v1/risk-assessments",
+            json={"merchant_id": "M0001", "date": "2026-01-01", "ignore": True},
+            headers=auth_headers(token),
+        )
+        assert extra_field.status_code == 422
+        missing_merchant = client.post(
+            "/api/v1/risk-assessments",
+            json={"merchant_id": "M0001", "date": "2026-01-01"},
+            headers=auth_headers(token),
+        )
+        assert missing_merchant.status_code == 404
+
+    def test_real_engine_persists_insufficient_evidence_without_opening_a_case(self, client):
+        token = register(client, "insufficient-evidence")["access_token"]
+        ingestion = client.post(
+            "/api/v1/ingestions/merchant-days",
+            json={"observations": observations("M8001", days=1)},
+            headers=auth_headers(token, "batch-insufficient-0001"),
+        )
+        assert ingestion.status_code == 201
+        assessment = client.post(
+            "/api/v1/risk-assessments",
+            json={"merchant_id": "M8001", "date": "2026-01-01"},
+            headers=auth_headers(token),
+        )
+        assert assessment.status_code == 201, assessment.get_json()
+        assert assessment.get_json()["status"] == "insufficient_evidence"
+        assert assessment.get_json()["case_id"] is None
