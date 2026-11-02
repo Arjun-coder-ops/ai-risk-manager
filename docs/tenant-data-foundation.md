@@ -13,6 +13,7 @@ explicitly synthetic backwards-compatible demo and are not a multi-tenant API.
 | PostgreSQL in Compose | Durable relational storage, constraints, indexes, and transactional ingestion. | SQLite remains test-only; it is not suitable for concurrent multi-user investigations. |
 | PyJWT + short-lived bearer tokens | Adds a clear authentication and organization-scoping boundary without a separate identity service. | Secure server sessions are viable; an external IdP should replace bootstrap registration for public production. |
 | Atomic batch ingestion | Prevents a partly accepted merchant-day batch from silently contaminating feature history. | Row-by-row partial writes would need a more complex error/retry contract. |
+| Database-backed transaction worker | Persists immutable pseudonymous transaction facts, then safely rebuilds affected daily aggregates on retry. | Redis/queue workers improve high-volume operations but are not justified for this small modular-monolith milestone. |
 | Database-backed assessments | Scores are reproducible from the organization’s persisted observations and retain model/policy/evidence traceability. | Reading the legacy CSV would mix demonstration data with tenant data. |
 | Explicit case state machine | Constrains investigation transitions and requires a decision plus note to close a case. | Free-form statuses are easier initially but make audit and operating metrics unreliable. |
 | Verified analyst feedback | Captures human outcomes separately from model decisions, then requires an admin to verify them. | Feeding unverified labels directly into training would create a poisoning and feedback-loop risk. |
@@ -22,9 +23,10 @@ explicitly synthetic backwards-compatible demo and are not a multi-tenant API.
 
 All tenant-owned operational tables carry `organization_id`. Database and API
 constraints cover organizations, users, memberships, merchants,
-merchant-day observations, ingestion batches and idempotency keys, model and
-feature records, risk assessments, investigation cases and events, feedback,
-audit events, and monitoring snapshots.
+merchant-day observations, immutable pseudonymous transaction records,
+ingestion batches/jobs and idempotency keys, model and feature records, risk
+assessments, investigation cases and events, feedback, audit events, and
+monitoring snapshots.
 
 `merchant_day_observations` is unique on `(merchant_id, observation_date)`;
 merchants are unique on `(organization_id, external_id)`; an ingestion key is
@@ -65,6 +67,7 @@ an invitation or enterprise identity-provider flow.
 - `PATCH`/`DELETE /api/v1/members/{user_id}` (admin only)
 - `POST /api/v1/ingestions/merchant-days` (admin/analyst; requires `Idempotency-Key`)
 - `POST /api/v1/ingestions/merchant-days/csv` (admin/analyst; multipart `file` and `Idempotency-Key`)
+- `POST /api/v1/ingestions/transactions` (admin/analyst; asynchronous daily aggregation; requires `Idempotency-Key`)
 - `GET /api/v1/ingestions/{id}`
 - `GET /api/v1/merchants`
 - `GET /api/v1/audit-events`
@@ -98,9 +101,37 @@ bytes replay the existing batch; reuse with different bytes returns `409`.
 
 CSV processing is synchronous and has a conservative, configurable
 `MAX_CSV_INGESTION_ROWS=1000` application limit in addition to the request-body
-limit. It is not a retrying background worker; queue-backed retries and
-transaction-level aggregation remain future work and must not be implied by
-this API.
+limit.
+
+Transaction ingestion is deliberately **asynchronous batch processing, not a
+real-time streaming system**. `POST /api/v1/ingestions/transactions` accepts
+at most `MAX_TRANSACTION_INGESTION_ROWS=1000` records and returns `202` only
+after it atomically persists immutable raw records and a `QUEUED` ingestion
+job. Each transaction requires exactly: `transaction_id`, `merchant_id`, a
+timezone-aware RFC 3339 `occurred_at`, non-negative finite `amount`,
+`outcome` (`SUCCEEDED` or `FAILED`), opaque `user_token`, opaque
+`device_token`, and a normalized `region_code`. Tokens must not contain PII.
+Duplicate provider transaction IDs are rejected per organization.
+
+The Compose `ingestion-worker` claims queued jobs from PostgreSQL. It rebuilds
+each affected merchant-day aggregate from transaction facts (`n_transactions`,
+failures, amounts, users, first-observed users, devices, and regions). A job
+retry never adds a second increment: recomputation replaces the aggregate.
+Jobs use bounded exponential retry (three attempts) and expose the batch state
+through `GET /api/v1/ingestions/{id}`. Direct merchant-day uploads and
+transaction-derived observations cannot occupy the same merchant/day, which
+prevents incompatible partial histories from being silently combined.
+
+For a manually managed deployment, run the worker as a separate long-lived
+process after migrations:
+
+```powershell
+python -m backend.ingestion_worker --poll-seconds 5
+```
+
+`python -m backend.ingestion_worker --once` is useful for a controlled local
+smoke test. The database worker is suitable for bounded demonstration batches;
+it is not a substitute for an independently operated, high-throughput queue.
 
 Cases support `OPEN`, `IN_REVIEW`, `ESCALATED`, `RESOLVED`, and
 `FALSE_POSITIVE`. The allowed transitions are deliberately one-way from the
@@ -123,8 +154,8 @@ organization scope and cannot remove or demote the final admin. It deliberately
 does not create accounts, accept another user's password, or issue public
 invitation tokens; production onboarding still needs an invitation/SSO flow.
 
-The workflow is synchronous in this milestone. It has no background workers,
-notification delivery, account provisioning/invitation flow, retraining workflow, or
-concurrency version token yet. No real merchant data should enter the legacy
-demo routes, and the bootstrap registration endpoint must not be publicly
-exposed.
+This milestone has a background worker only for retry-safe transaction-to-day
+aggregation. It still has no notification delivery, account
+provisioning/invitation flow, retraining workflow, or case concurrency version
+token. No real merchant data should enter the legacy demo routes, and the
+bootstrap registration endpoint must not be publicly exposed.

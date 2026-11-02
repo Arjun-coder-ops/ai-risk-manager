@@ -31,6 +31,7 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - ALLOW_BOOTSTRAP_REGISTRATION=${ALLOW_BOOTSTRAP_REGISTRATION:-false}
       - MAX_CSV_INGESTION_ROWS=${MAX_CSV_INGESTION_ROWS:-1000}
+      - MAX_TRANSACTION_INGESTION_ROWS=${MAX_TRANSACTION_INGESTION_ROWS:-1000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,6 +56,31 @@ services:
     #     reservations:
     #       cpus: '1'
     #       memory: 1G
+
+  ingestion-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-ai_risk}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_risk}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-risk-manager:
+        condition: service_healthy
+    command: ["python", "-m", "backend.ingestion_worker", "--poll-seconds", "5"]
+    healthcheck:
+      # This process has no HTTP listener.  Verify the dependency it needs to
+      # claim and complete jobs instead of inheriting the web API healthcheck.
+      test: ["CMD", "python", "-c", "from backend.database import get_engine; from sqlalchemy import text; connection=get_engine().connect(); connection.execute(text('SELECT 1')); connection.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - ai-risk-network
+    restart: unless-stopped
 
 networks:
   ai-risk-network:

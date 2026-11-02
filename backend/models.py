@@ -100,6 +100,10 @@ class MerchantDayObservation(Base):
     merchant_id: Mapped[str] = mapped_column(ForeignKey("merchants.id", ondelete="CASCADE"), nullable=False, index=True)
     ingestion_batch_id: Mapped[str] = mapped_column(ForeignKey("ingestion_batches.id", ondelete="RESTRICT"), nullable=False, index=True)
     observation_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # Direct merchant-day uploads and transaction-derived aggregates must not
+    # be mixed for the same merchant/day.  The worker may safely recompute the
+    # latter from immutable transaction records on every retry.
+    source_kind: Mapped[str] = mapped_column(String(32), default="merchant_day", nullable=False)
     n_transactions: Mapped[int] = mapped_column(Integer, nullable=False)
     n_failed: Mapped[int] = mapped_column(Integer, nullable=False)
     avg_amount: Mapped[float] = mapped_column(nullable=False)
@@ -109,6 +113,58 @@ class MerchantDayObservation(Base):
     n_devices: Mapped[int] = mapped_column(Integer, nullable=False)
     distinct_regions_seen: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class TransactionRecord(Base):
+    """An immutable, pseudonymous transaction input used for daily aggregation.
+
+    The API accepts only provider transaction identifiers and opaque user/device
+    tokens.  It deliberately does not model card details, names, or other PII.
+    """
+
+    __tablename__ = "transaction_records"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "external_id", name="uq_transaction_organization_external"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    merchant_id: Mapped[str] = mapped_column(ForeignKey("merchants.id", ondelete="CASCADE"), nullable=False, index=True)
+    ingestion_batch_id: Mapped[str] = mapped_column(ForeignKey("ingestion_batches.id", ondelete="RESTRICT"), nullable=False, index=True)
+    external_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    amount: Mapped[float] = mapped_column(nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    user_token: Mapped[str] = mapped_column(String(128), nullable=False)
+    device_token: Mapped[str] = mapped_column(String(128), nullable=False)
+    region_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IngestionJob(Base):
+    """Durable background-work state for an ingestion batch.
+
+    A transaction job is retry-safe because its immutable raw records are
+    already committed before processing begins; the worker recomputes affected
+    merchant-days rather than applying a non-idempotent increment.
+    """
+
+    __tablename__ = "ingestion_jobs"
+    __table_args__ = (UniqueConstraint("ingestion_batch_id", name="uq_ingestion_job_batch"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    ingestion_batch_id: Mapped[str] = mapped_column(ForeignKey("ingestion_batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", nullable=False, index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(512))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class ModelVersion(Base):

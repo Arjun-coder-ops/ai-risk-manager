@@ -300,6 +300,14 @@ tenant data. Copy `.env.example` to `.env`, replace its placeholders, and run
 `ALLOW_BOOTSTRAP_REGISTRATION` defaults to `false`; enable it temporarily only
 to create an initial local administrator.
 
+The tenant API supports atomic merchant-day JSON/CSV uploads and bounded,
+asynchronous transaction batches. Transaction records use opaque provider,
+user, and device identifiers only; Compose starts a separate database-backed
+worker that rebuilds daily aggregates and retries safely. This is batch
+processing—not a real-time streaming claim. See
+[`docs/tenant-data-foundation.md`](docs/tenant-data-foundation.md) for the
+strict request contract, state model, and operational limits.
+
 ## Limitations
 
 - Data is synthetic; real-world merchant behaviour is messier and this

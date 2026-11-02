@@ -7,7 +7,7 @@ compatibility. New tenant data must use this authenticated ``/api/v1`` API.
 from __future__ import annotations
 
 import csv
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 from io import StringIO
 import json
@@ -25,6 +25,7 @@ from backend.models import (
     AnalystFeedback,
     AuditEvent,
     IngestionBatch,
+    IngestionJob,
     InvestigationCase,
     InvestigationEvent,
     Membership,
@@ -32,8 +33,10 @@ from backend.models import (
     MerchantDayObservation,
     Organization,
     RiskAssessment,
+    TransactionRecord,
     User,
 )
+from backend.transaction_validation import TransactionValidationError, validate_transactions
 from model.validation import (
     ObservationValidationError,
     REQUIRED_INPUT_FIELDS,
@@ -152,6 +155,29 @@ def parse_csv_upload(upload) -> list[tuple[int, dict]]:
 def append_ingestion_error(errors: list[dict], line_number: int, reason: str) -> None:
     if len(errors) < MAX_REPORTED_INGESTION_ERRORS:
         errors.append({"line": line_number, "reason": reason})
+
+
+def transaction_days_for_merchants(session, merchant_ids: list[str], candidate_dates: set[date]) -> set[tuple[str, date]]:
+    """Find raw transaction days that cannot be mixed with direct aggregates."""
+    if not merchant_ids or not candidate_dates:
+        return set()
+    start = datetime.combine(min(candidate_dates), datetime.min.time(), tzinfo=timezone.utc)
+    end = datetime.combine(max(candidate_dates), datetime.min.time(), tzinfo=timezone.utc) + timedelta(days=1)
+    records = session.execute(
+        select(TransactionRecord.merchant_id, TransactionRecord.occurred_at).where(
+            TransactionRecord.merchant_id.in_(merchant_ids),
+            TransactionRecord.occurred_at >= start,
+            TransactionRecord.occurred_at < end,
+        )
+    ).all()
+    result: set[tuple[str, date]] = set()
+    for merchant_id, occurred_at in records:
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=timezone.utc)
+        record_date = occurred_at.astimezone(timezone.utc).date()
+        if record_date in candidate_dates:
+            result.add((merchant_id, record_date))
+    return result
 
 
 def validate_csv_rows(rows: list[tuple[int, dict]]) -> tuple[list[tuple[int, dict]], list[dict]]:
@@ -601,6 +627,14 @@ def ingest_merchant_days():
         if any((merchant_id, observation_date) in incoming_keys for merchant_id, observation_date in existing_rows):
             session.rollback()
             return api_error("One or more merchant-day observations already exist for this organization.", 409)
+        transaction_keys = transaction_days_for_merchants(
+            session,
+            [merchant.id for merchant in existing_merchants.values()],
+            {key[1] for key in incoming_keys},
+        )
+        if any(key in transaction_keys for key in incoming_keys):
+            session.rollback()
+            return api_error("One or more merchant-days already contain transaction-level records and cannot accept a direct aggregate.", 409)
 
         batch = IngestionBatch(
             organization_id=g.principal.organization_id,
@@ -621,6 +655,7 @@ def ingest_merchant_days():
                 merchant_id=merchant.id,
                 ingestion_batch_id=batch.id,
                 observation_date=date.fromisoformat(row["date"]),
+                source_kind="merchant_day",
                 n_transactions=row["n_transactions"],
                 n_failed=row["n_failed"],
                 avg_amount=row["avg_amount"],
@@ -692,11 +727,26 @@ def ingest_merchant_days_csv():
                 )
             }
 
+        transaction_keys = transaction_days_for_merchants(
+            session,
+            [merchant.id for merchant in existing_merchants.values()],
+            {date.fromisoformat(record["date"]) for _, record in candidates},
+        )
+        transaction_external_keys = {
+            (external_id, observation_date.isoformat())
+            for external_id, merchant in existing_merchants.items()
+            for merchant_id, observation_date in transaction_keys
+            if merchant_id == merchant.id
+        }
+
         persistable: list[tuple[int, dict]] = []
         for line_number, record in candidates:
             key = (record["merchant_id"], record["date"])
             if key in existing_keys:
                 append_ingestion_error(errors, line_number, "Merchant-day observation already exists for this organization.")
+                continue
+            if key in transaction_external_keys:
+                append_ingestion_error(errors, line_number, "Merchant-day already contains transaction-level records and cannot accept a direct aggregate.")
                 continue
             persistable.append((line_number, record))
 
@@ -734,6 +784,7 @@ def ingest_merchant_days_csv():
                 merchant_id=merchant.id,
                 ingestion_batch_id=batch.id,
                 observation_date=date.fromisoformat(row["date"]),
+                source_kind="merchant_day",
                 n_transactions=row["n_transactions"],
                 n_failed=row["n_failed"],
                 avg_amount=row["avg_amount"],
@@ -759,6 +810,140 @@ def ingest_merchant_days_csv():
         )
         session.commit()
         return jsonify(serialize_batch(batch)), 201
+    except Exception:
+        session.rollback()
+        raise
+
+
+@tenant_api.route("/ingestions/transactions", methods=["POST"])
+@require_auth({"admin", "analyst"})
+def ingest_transactions():
+    """Durably accept pseudonymous transactions and queue daily aggregation.
+
+    The 202 response means immutable raw records are committed, not that their
+    merchant-day aggregate is already available.  A database-backed worker
+    performs the aggregation and clients can poll the returned ingestion batch.
+    """
+    body, error = request_object()
+    if error:
+        return error
+    idempotency_key = request.headers.get("Idempotency-Key", "")
+    if not IDEMPOTENCY_PATTERN.fullmatch(idempotency_key):
+        return api_error("Idempotency-Key header must contain 8-128 safe characters.", 400)
+    transactions = body.get("transactions")
+    maximum_rows = int(current_app.config.get("MAX_TRANSACTION_INGESTION_ROWS", 1000))
+    if isinstance(transactions, list) and len(transactions) > maximum_rows:
+        return api_error(f"transactions exceeds the {maximum_rows}-record ingestion limit.", 413)
+    try:
+        validated = validate_transactions(transactions)
+    except TransactionValidationError as exc:
+        return api_error(str(exc), 422)
+
+    normalized_records = sorted(validated, key=lambda record: record["transaction_id"])
+    payload_hash = hashlib.sha256(
+        json.dumps(normalized_records, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    session = g.db
+    try:
+        existing_batch = session.scalar(select(IngestionBatch).where(
+            IngestionBatch.organization_id == g.principal.organization_id,
+            IngestionBatch.idempotency_key == idempotency_key,
+        ))
+        if existing_batch is not None:
+            if existing_batch.payload_hash != payload_hash:
+                return api_error("Idempotency-Key has already been used with a different payload.", 409)
+            return jsonify(serialize_batch(existing_batch, replayed=True))
+
+        transaction_ids = [record["transaction_id"] for record in normalized_records]
+        existing_transaction_ids = set(session.scalars(select(TransactionRecord.external_id).where(
+            TransactionRecord.organization_id == g.principal.organization_id,
+            TransactionRecord.external_id.in_(transaction_ids),
+        )))
+        if existing_transaction_ids:
+            return api_error("One or more transaction_id values already exist for this organization.", 409)
+
+        merchant_external_ids = sorted({record["merchant_id"] for record in normalized_records})
+        merchants = {
+            merchant.external_id: merchant
+            for merchant in session.scalars(select(Merchant).where(
+                Merchant.organization_id == g.principal.organization_id,
+                Merchant.external_id.in_(merchant_external_ids),
+            ))
+        }
+        for external_id in merchant_external_ids:
+            if external_id not in merchants:
+                merchant = Merchant(organization_id=g.principal.organization_id, external_id=external_id)
+                session.add(merchant)
+                merchants[external_id] = merchant
+        session.flush()
+
+        incoming_days = {
+            (merchants[record["merchant_id"]].id, date.fromisoformat(record["date"]))
+            for record in normalized_records
+        }
+        existing_observations = session.scalars(select(MerchantDayObservation).where(
+            MerchantDayObservation.organization_id == g.principal.organization_id,
+            MerchantDayObservation.merchant_id.in_([merchant.id for merchant in merchants.values()]),
+            MerchantDayObservation.observation_date.in_([day for _, day in incoming_days]),
+        )).all()
+        direct_keys = {
+            (observation.merchant_id, observation.observation_date)
+            for observation in existing_observations
+            if observation.source_kind != "transaction_aggregate"
+        }
+        if incoming_days & direct_keys:
+            session.rollback()
+            return api_error("One or more transaction days already have a direct merchant-day aggregate.", 409)
+
+        batch = IngestionBatch(
+            organization_id=g.principal.organization_id,
+            created_by_user_id=g.principal.user_id,
+            idempotency_key=idempotency_key,
+            payload_hash=payload_hash,
+            status="QUEUED",
+            received_count=len(normalized_records),
+            accepted_count=len(normalized_records),
+            rejected_count=0,
+            error_summary={"source": "transaction_api", "processing_state": "queued"},
+        )
+        session.add(batch)
+        session.flush()
+        for record in normalized_records:
+            session.add(TransactionRecord(
+                organization_id=g.principal.organization_id,
+                merchant_id=merchants[record["merchant_id"]].id,
+                ingestion_batch_id=batch.id,
+                external_id=record["transaction_id"],
+                occurred_at=datetime.fromisoformat(record["occurred_at"].replace("Z", "+00:00")),
+                amount=record["amount"],
+                outcome=record["outcome"],
+                user_token=record["user_token"],
+                device_token=record["device_token"],
+                region_code=record["region_code"],
+            ))
+        session.add(IngestionJob(
+            organization_id=g.principal.organization_id,
+            ingestion_batch_id=batch.id,
+            payload={
+                "source": "transaction_api",
+                "merchant_day_count": len(incoming_days),
+            },
+        ))
+        write_audit(
+            session,
+            organization_id=g.principal.organization_id,
+            actor_user_id=g.principal.user_id,
+            action="transaction_ingestion.queued",
+            entity_type="ingestion_batch",
+            entity_id=batch.id,
+            payload={
+                "transaction_count": len(normalized_records),
+                "merchant_day_count": len(incoming_days),
+                "idempotency_key": idempotency_key,
+            },
+        )
+        session.commit()
+        return jsonify(serialize_batch(batch)), 202
     except Exception:
         session.rollback()
         raise

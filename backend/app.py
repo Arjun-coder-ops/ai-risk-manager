@@ -60,6 +60,7 @@ def env_flag(name: str, default: bool = False) -> bool:
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_REQUEST_BYTES", "65536"))
 app.config["MAX_CSV_INGESTION_ROWS"] = int(os.environ.get("MAX_CSV_INGESTION_ROWS", "1000"))
+app.config["MAX_TRANSACTION_INGESTION_ROWS"] = int(os.environ.get("MAX_TRANSACTION_INGESTION_ROWS", "1000"))
 
 # CORS controls which browser origins may read a response; it is not an
 # authentication or authorization mechanism.  This prototype serves only

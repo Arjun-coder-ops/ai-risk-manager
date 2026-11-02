@@ -10,14 +10,16 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 from werkzeug.security import generate_password_hash
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 import app as application  # noqa: E402
 from backend.auth import issue_access_token  # noqa: E402
+from backend import ingestion_worker  # noqa: E402
 from backend.database import configure_database, create_schema, get_session  # noqa: E402
-from backend.models import Membership, User  # noqa: E402
+from backend.models import IngestionJob, Membership, MerchantDayObservation, User, utcnow  # noqa: E402
 from model.validation import REQUIRED_INPUT_FIELDS  # noqa: E402
 
 
@@ -91,6 +93,41 @@ def csv_upload(rows: list[dict], filename: str = "merchant-days.csv") -> dict:
     writer.writeheader()
     writer.writerows(rows)
     return {"file": (BytesIO(output.getvalue().encode("utf-8")), filename)}
+
+
+def transactions() -> list[dict]:
+    return [
+        {
+            "transaction_id": "txn-0001",
+            "merchant_id": "MTRANS",
+            "occurred_at": "2026-01-01T09:00:00Z",
+            "amount": 100.0,
+            "outcome": "SUCCEEDED",
+            "user_token": "user-alpha",
+            "device_token": "device-one",
+            "region_code": "IN-KA",
+        },
+        {
+            "transaction_id": "txn-0002",
+            "merchant_id": "MTRANS",
+            "occurred_at": "2026-01-01T13:00:00+00:00",
+            "amount": 50.0,
+            "outcome": "FAILED",
+            "user_token": "user-alpha",
+            "device_token": "device-two",
+            "region_code": "IN-DL",
+        },
+        {
+            "transaction_id": "txn-0003",
+            "merchant_id": "MTRANS",
+            "occurred_at": "2026-01-02T09:00:00Z",
+            "amount": 200.0,
+            "outcome": "SUCCEEDED",
+            "user_token": "user-bravo",
+            "device_token": "device-two",
+            "region_code": "IN-KA",
+        },
+    ]
 
 
 class DeterministicRiskEngine:
@@ -310,6 +347,102 @@ class TestTenantAuthAndIngestion:
             headers=auth_headers(token, "batch-csv-limit-0001"),
         )
         assert limited.status_code == 413
+
+    def test_transaction_ingestion_aggregates_asynchronously_and_is_idempotent(self, client):
+        token = register(client, "transactions") ["access_token"]
+        payload = {"transactions": transactions()}
+        headers = auth_headers(token, "transaction-batch-0001")
+        created = client.post("/api/v1/ingestions/transactions", json=payload, headers=headers)
+        assert created.status_code == 202, created.get_json()
+        batch = created.get_json()
+        assert batch["status"] == "QUEUED"
+        assert batch["accepted_count"] == 3
+
+        replay = client.post("/api/v1/ingestions/transactions", json=payload, headers=headers)
+        assert replay.status_code == 200
+        assert replay.get_json()["id"] == batch["id"]
+        assert ingestion_worker.run_once() is True
+
+        completed = client.get(f"/api/v1/ingestions/{batch['id']}", headers=auth_headers(token))
+        assert completed.status_code == 200
+        assert completed.get_json()["status"] == "SUCCEEDED"
+        session = get_session()
+        try:
+            observations = session.scalars(select(MerchantDayObservation).order_by(MerchantDayObservation.observation_date)).all()
+            assert len(observations) == 2
+            first, second = observations
+            assert first.source_kind == "transaction_aggregate"
+            assert first.n_transactions == 2
+            assert first.n_failed == 1
+            assert first.avg_amount == 75.0
+            assert first.amount_std == 25.0
+            assert first.n_unique_users == 1
+            assert first.n_new_users == 1
+            assert first.n_devices == 2
+            assert first.distinct_regions_seen == 2
+            assert second.n_transactions == 1
+            assert second.n_new_users == 1
+        finally:
+            session.close()
+
+        duplicate = client.post(
+            "/api/v1/ingestions/transactions",
+            json={"transactions": [transactions()[0]]},
+            headers=auth_headers(token, "transaction-batch-0002"),
+        )
+        assert duplicate.status_code == 409
+
+    def test_transaction_ingestion_does_not_mix_with_direct_merchant_day_aggregates(self, client):
+        token = register(client, "transaction-conflict")["access_token"]
+        direct = client.post(
+            "/api/v1/ingestions/merchant-days",
+            json={"observations": observations("MTRANS", days=1)},
+            headers=auth_headers(token, "direct-conflict-0001"),
+        )
+        assert direct.status_code == 201
+        blocked = client.post(
+            "/api/v1/ingestions/transactions",
+            json={"transactions": [transactions()[0]]},
+            headers=auth_headers(token, "transaction-conflict-0001"),
+        )
+        assert blocked.status_code == 409
+        assert "direct merchant-day aggregate" in blocked.get_json()["reason"]
+
+    def test_transaction_worker_retries_without_double_counting(self, client, monkeypatch):
+        token = register(client, "transaction-retry")["access_token"]
+        queued = client.post(
+            "/api/v1/ingestions/transactions",
+            json={"transactions": [transactions()[0]]},
+            headers=auth_headers(token, "transaction-retry-0001"),
+        )
+        assert queued.status_code == 202
+        batch_id = queued.get_json()["id"]
+        original_aggregate = ingestion_worker._aggregate_day
+        monkeypatch.setattr(ingestion_worker, "_aggregate_day", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("test failure")))
+        assert ingestion_worker.run_once() is True
+        retry = client.get(f"/api/v1/ingestions/{batch_id}", headers=auth_headers(token))
+        assert retry.get_json()["status"] == "QUEUED"
+
+        monkeypatch.setattr(ingestion_worker, "_aggregate_day", original_aggregate)
+        session = get_session()
+        try:
+            job = session.scalar(select(IngestionJob))
+            assert job is not None
+            assert job.status == "RETRY"
+            job.next_attempt_at = utcnow()
+            session.commit()
+        finally:
+            session.close()
+        assert ingestion_worker.run_once() is True
+        completed = client.get(f"/api/v1/ingestions/{batch_id}", headers=auth_headers(token))
+        assert completed.get_json()["status"] == "SUCCEEDED"
+        session = get_session()
+        try:
+            observation = session.scalar(select(MerchantDayObservation))
+            assert observation.n_transactions == 1
+            assert observation.n_failed == 0
+        finally:
+            session.close()
 
 
 class TestTenantMemberAdministration:
