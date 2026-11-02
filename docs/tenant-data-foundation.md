@@ -45,6 +45,11 @@ For an externally managed database, set `DATABASE_URL` using the
 alembic upgrade head
 ```
 
+The container runs the existing Flask WSGI application with pinned Gunicorn,
+not Flask's development server. It executes migrations before booting only to
+keep local Compose reproducible; deployed environments should run migrations
+as a dedicated release operation.
+
 The bootstrap endpoint `POST /api/v1/auth/register` exists for local
 development. Do not expose it publicly; production onboarding must use an
 invitation or enterprise identity-provider flow.

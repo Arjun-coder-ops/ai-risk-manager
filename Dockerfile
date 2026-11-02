@@ -41,5 +41,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Apply schema migrations before starting the application. Production delivery
 # should run this as a dedicated one-off release job; this command keeps local
-# Docker Compose startup reproducible.
-CMD ["sh", "-c", "alembic upgrade head && exec python -m flask --app backend.app run --host=0.0.0.0 --port=8000"]
+# Docker Compose startup reproducible. Gunicorn replaces Flask's development
+# server while retaining the existing Flask WSGI application.
+CMD ["sh", "-c", "alembic upgrade head && exec gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-1} --timeout ${GUNICORN_TIMEOUT:-60} --access-logfile - --error-logfile - backend.app:app"]
