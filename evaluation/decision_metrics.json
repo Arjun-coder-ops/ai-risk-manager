@@ -1,0 +1,1211 @@
+{
+  "report_kind": "phase-4.3-decision-metrics",
+  "generated_at": "2026-11-07T17:13:49.763936+00:00",
+  "model_version": "fraud-spike-v2-eod",
+  "model_type": "gradient_boosting",
+  "feature_schema_version": "merchant-day-eod-v2",
+  "evaluation_population": {
+    "name": "frozen_declared_temporal_test",
+    "rows": 6157,
+    "date_range": [
+      "2026-05-16",
+      "2026-06-29"
+    ],
+    "positive_rate": 0.07325,
+    "disclosure": "Scores are recomputed only to expand metrics for the frozen artifact; this run performs no selection, tuning, calibration, or promotion."
+  },
+  "no_information_baseline": {
+    "roc_auc": 0.5,
+    "pr_auc": 0.07325,
+    "description": "Random ranking / prevalence baseline."
+  },
+  "ranking": {
+    "rows": 6157,
+    "positive_rate": 0.07325,
+    "roc_auc": 0.990291,
+    "pr_auc": 0.950014
+  },
+  "review_tier": {
+    "threshold": 0.1,
+    "precision": 0.815385,
+    "recall": 0.940133,
+    "f1": 0.873326,
+    "false_positive_rate": 0.016824,
+    "false_alerts_per_1000_merchant_days": 15.592009,
+    "alerts": 520,
+    "confusion_matrix": {
+      "tp": 424,
+      "fp": 96,
+      "tn": 5610,
+      "fn": 27
+    }
+  },
+  "high_tier": {
+    "threshold": 0.67,
+    "precision": 0.9599,
+    "recall": 0.849224,
+    "f1": 0.901176,
+    "false_positive_rate": 0.002804,
+    "false_alerts_per_1000_merchant_days": 2.598668,
+    "alerts": 399,
+    "confusion_matrix": {
+      "tp": 383,
+      "fp": 16,
+      "tn": 5690,
+      "fn": 68
+    }
+  },
+  "fixed_review_budget": {
+    "review_budget_per_1000_merchant_days": 50,
+    "review_budget_rows": 308,
+    "precision_at_k": 0.977273,
+    "recall_at_fixed_review_budget": 0.667406,
+    "score_cutoff_at_k": 0.933039
+  },
+  "raw_probability_calibration": {
+    "score_semantics": "uncalibrated_model_probability",
+    "brier_score": 0.010649,
+    "expected_calibration_error": 0.003681,
+    "bins": [
+      {
+        "lower": 0.0,
+        "upper": 0.1,
+        "count": 5637,
+        "observed_positive_rate": 0.00479,
+        "mean_score": 0.006433
+      },
+      {
+        "lower": 0.1,
+        "upper": 0.2,
+        "count": 47,
+        "observed_positive_rate": 0.212766,
+        "mean_score": 0.140473
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.3,
+        "count": 19,
+        "observed_positive_rate": 0.315789,
+        "mean_score": 0.245307
+      },
+      {
+        "lower": 0.3,
+        "upper": 0.4,
+        "count": 17,
+        "observed_positive_rate": 0.235294,
+        "mean_score": 0.354684
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.5,
+        "count": 13,
+        "observed_positive_rate": 0.461538,
+        "mean_score": 0.45036
+      },
+      {
+        "lower": 0.5,
+        "upper": 0.6,
+        "count": 16,
+        "observed_positive_rate": 0.6875,
+        "mean_score": 0.548831
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.7,
+        "count": 14,
+        "observed_positive_rate": 0.571429,
+        "mean_score": 0.65419
+      },
+      {
+        "lower": 0.7,
+        "upper": 0.8,
+        "count": 19,
+        "observed_positive_rate": 0.736842,
+        "mean_score": 0.747498
+      },
+      {
+        "lower": 0.8,
+        "upper": 0.9,
+        "count": 35,
+        "observed_positive_rate": 0.914286,
+        "mean_score": 0.863258
+      },
+      {
+        "lower": 0.9,
+        "upper": 1.0,
+        "count": 340,
+        "observed_positive_rate": 0.979412,
+        "mean_score": 0.976097
+      }
+    ]
+  },
+  "business_cost_sensitivity": {
+    "review_tier": {
+      "default_illustrative": {
+        "assumptions": {
+          "manual_review_cost_inr": 150.0,
+          "merchant_friction_cost_inr": 300.0,
+          "undetected_fraud_loss_inr": 8000.0,
+          "false_positive_cost_per_event_inr": 450.0,
+          "false_negative_cost_per_event_inr": 8000.0,
+          "disclosure": "These are configurable illustrative assumptions for a prototype, not real Razorpay financial figures."
+        },
+        "confusion_matrix": {
+          "tp": 424,
+          "fp": 96,
+          "tn": 5610,
+          "fn": 27
+        },
+        "total_false_positive_cost_inr": 43200.0,
+        "total_false_negative_cost_inr": 216000.0,
+        "total_estimated_cost_inr": 259200.0
+      },
+      "false_negative_heavy": {
+        "assumptions": {
+          "manual_review_cost_inr": 150.0,
+          "merchant_friction_cost_inr": 300.0,
+          "undetected_fraud_loss_inr": 16000.0,
+          "false_positive_cost_per_event_inr": 450.0,
+          "false_negative_cost_per_event_inr": 16000.0,
+          "disclosure": "These are configurable illustrative assumptions for a prototype, not real Razorpay financial figures."
+        },
+        "confusion_matrix": {
+          "tp": 424,
+          "fp": 96,
+          "tn": 5610,
+          "fn": 27
+        },
+        "total_false_positive_cost_inr": 43200.0,
+        "total_false_negative_cost_inr": 432000.0,
+        "total_estimated_cost_inr": 475200.0
+      },
+      "false_positive_heavy": {
+        "assumptions": {
+          "manual_review_cost_inr": 300.0,
+          "merchant_friction_cost_inr": 600.0,
+          "undetected_fraud_loss_inr": 8000.0,
+          "false_positive_cost_per_event_inr": 900.0,
+          "false_negative_cost_per_event_inr": 8000.0,
+          "disclosure": "These are configurable illustrative assumptions for a prototype, not real Razorpay financial figures."
+        },
+        "confusion_matrix": {
+          "tp": 424,
+          "fp": 96,
+          "tn": 5610,
+          "fn": 27
+        },
+        "total_false_positive_cost_inr": 86400.0,
+        "total_false_negative_cost_inr": 216000.0,
+        "total_estimated_cost_inr": 302400.0
+      }
+    },
+    "high_tier": {
+      "default_illustrative": {
+        "assumptions": {
+          "manual_review_cost_inr": 150.0,
+          "merchant_friction_cost_inr": 300.0,
+          "undetected_fraud_loss_inr": 8000.0,
+          "false_positive_cost_per_event_inr": 450.0,
+          "false_negative_cost_per_event_inr": 8000.0,
+          "disclosure": "These are configurable illustrative assumptions for a prototype, not real Razorpay financial figures."
+        },
+        "confusion_matrix": {
+          "tp": 383,
+          "fp": 16,
+          "tn": 5690,
+          "fn": 68
+        },
+        "total_false_positive_cost_inr": 7200.0,
+        "total_false_negative_cost_inr": 544000.0,
+        "total_estimated_cost_inr": 551200.0
+      },
+      "false_negative_heavy": {
+        "assumptions": {
+          "manual_review_cost_inr": 150.0,
+          "merchant_friction_cost_inr": 300.0,
+          "undetected_fraud_loss_inr": 16000.0,
+          "false_positive_cost_per_event_inr": 450.0,
+          "false_negative_cost_per_event_inr": 16000.0,
+          "disclosure": "These are configurable illustrative assumptions for a prototype, not real Razorpay financial figures."
+        },
+        "confusion_matrix": {
+          "tp": 383,
+          "fp": 16,
+          "tn": 5690,
+          "fn": 68
+        },
+        "total_false_positive_cost_inr": 7200.0,
+        "total_false_negative_cost_inr": 1088000.0,
+        "total_estimated_cost_inr": 1095200.0
+      },
+      "false_positive_heavy": {
+        "assumptions": {
+          "manual_review_cost_inr": 300.0,
+          "merchant_friction_cost_inr": 600.0,
+          "undetected_fraud_loss_inr": 8000.0,
+          "false_positive_cost_per_event_inr": 900.0,
+          "false_negative_cost_per_event_inr": 8000.0,
+          "disclosure": "These are configurable illustrative assumptions for a prototype, not real Razorpay financial figures."
+        },
+        "confusion_matrix": {
+          "tp": 383,
+          "fp": 16,
+          "tn": 5690,
+          "fn": 68
+        },
+        "total_false_positive_cost_inr": 14400.0,
+        "total_false_negative_cost_inr": 544000.0,
+        "total_estimated_cost_inr": 558400.0
+      }
+    }
+  },
+  "event_metrics": {
+    "review_tier": {
+      "events_evaluated": 107,
+      "events_detected": 107,
+      "event_level_recall": 1.0,
+      "undetected_events": 0,
+      "mean_time_to_detect_days": 0.074766,
+      "median_time_to_detect_days": 0.0,
+      "outcomes": [
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        }
+      ]
+    },
+    "high_tier": {
+      "events_evaluated": 107,
+      "events_detected": 106,
+      "event_level_recall": 0.990654,
+      "undetected_events": 1,
+      "mean_time_to_detect_days": 0.216981,
+      "median_time_to_detect_days": 0.0,
+      "outcomes": [
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": false,
+          "time_to_detect_days": null
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 2
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 2
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 1
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        },
+        {
+          "detected": true,
+          "time_to_detect_days": 0
+        }
+      ]
+    }
+  },
+  "uncertainty_intervals": {
+    "merchant_aware": {
+      "method": "merchant_cluster_bootstrap_percentile",
+      "requested_resamples": 200,
+      "effective_resamples": 200,
+      "random_state": 42,
+      "intervals": {
+        "roc_auc": {
+          "lower_95": 0.984332,
+          "upper_95": 0.995165
+        },
+        "pr_auc": {
+          "lower_95": 0.914826,
+          "upper_95": 0.972391
+        },
+        "review_precision": {
+          "lower_95": 0.767959,
+          "upper_95": 0.859018
+        },
+        "review_recall": {
+          "lower_95": 0.912,
+          "upper_95": 0.96559
+        },
+        "review_false_positive_rate": {
+          "lower_95": 0.012454,
+          "upper_95": 0.022047
+        },
+        "brier_score": {
+          "lower_95": 0.007594,
+          "upper_95": 0.014858
+        },
+        "expected_calibration_error": {
+          "lower_95": 0.002921,
+          "upper_95": 0.006981
+        }
+      }
+    },
+    "event_aware": {
+      "review_tier": {
+        "method": "event_cluster_bootstrap_percentile",
+        "resamples": 200,
+        "random_state": 42,
+        "intervals": {
+          "event_level_recall": {
+            "lower_95": 1.0,
+            "upper_95": 1.0
+          },
+          "median_time_to_detect_days": {
+            "lower_95": 0.0,
+            "upper_95": 0.0
+          }
+        }
+      },
+      "high_tier": {
+        "method": "event_cluster_bootstrap_percentile",
+        "resamples": 200,
+        "random_state": 42,
+        "intervals": {
+          "event_level_recall": {
+            "lower_95": 0.962617,
+            "upper_95": 1.0
+          },
+          "median_time_to_detect_days": {
+            "lower_95": 0.0,
+            "upper_95": 0.0
+          }
+        }
+      }
+    }
+  },
+  "selection_boundary": "This report evaluates the frozen artifact. Probability calibration methods are evaluated separately in Phase 4.4."
+}

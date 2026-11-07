@@ -153,6 +153,11 @@ stress-test protocols without promoting a model. The report shows material
 synthetic OOD and mild-anomaly degradation; details and limitations are in
 [`docs/evaluation-protocols.md`](docs/evaluation-protocols.md).
 
+Phase 4.3 adds decision-quality, fixed-review-capacity, event-detection, raw
+calibration, cost-sensitivity, and cluster-bootstrap uncertainty evidence for
+the frozen artifact. It does not select, calibrate, or promote a model; see
+[`docs/decision-metrics.md`](docs/decision-metrics.md).
+
 ## Independent synthetic OOD stress test
 
 The held-out result above is synthetic **in-distribution** evidence only. A
@@ -363,6 +368,8 @@ ai-risk-manager/
 ├── evaluation/
 │   ├── evaluate.py               # one-time held-out test evaluation
 │   ├── test_results.json         # actual measured results (generated)
+│   ├── run_decision_metrics.py   # reproducible Phase 4.3 metric report
+│   ├── decision_metrics.json     # frozen-artifact decision evidence
 │   └── audit_log.jsonl           # runtime audit trail (generated)
 ├── tests/test_risk_engine.py    # feature leakage, policy, failure-handling tests
 ├── data/                         # generated CSVs (raw + processed)

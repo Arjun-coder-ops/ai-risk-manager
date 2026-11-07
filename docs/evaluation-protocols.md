@@ -38,5 +38,7 @@ Run the protocol in the pinned environment:
 python evaluation/run_generalization_protocols.py
 ```
 
-Phase 4.3 will add the complete decision, review-budget, event, calibration,
-and cost metric contract. Phase 4.4 will separately test calibration methods.
+Phase 4.3 now supplies the complete decision, review-budget, event, raw
+calibration, cost, and cluster-bootstrap metric contract in
+[`decision-metrics.md`](decision-metrics.md). Phase 4.4 separately tests
+calibration methods.
