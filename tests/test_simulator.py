@@ -85,6 +85,8 @@ def test_only_injected_fraud_windows_receive_positive_ground_truth_labels():
         {"n_merchants": 0},
         {"n_days": 29},
         {"fraud_day_rate": 0.0},
+        {"fraud_severity_min": 0.0},
+        {"fraud_severity_min": 0.8, "fraud_severity_max": 0.5},
         {"missing_observation_rate": 1.1},
         {"start_date": "01-01-2026"},
     ],

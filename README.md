@@ -148,6 +148,11 @@ currently deployed model while the remaining evaluation and calibration gates
 are implemented. Its reproducible protocol and selection boundary are in
 [`docs/classical-experiments.md`](docs/classical-experiments.md).
 
+Phase 4.2 adds independent temporal, merchant-disjoint, OOD, cold-start, and
+stress-test protocols without promoting a model. The report shows material
+synthetic OOD and mild-anomaly degradation; details and limitations are in
+[`docs/evaluation-protocols.md`](docs/evaluation-protocols.md).
+
 ## Independent synthetic OOD stress test
 
 The held-out result above is synthetic **in-distribution** evidence only. A

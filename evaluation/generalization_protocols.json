@@ -1,0 +1,310 @@
+{
+  "report_kind": "phase-4.2-generalization-protocols",
+  "generated_at": "2026-11-07T06:05:52.842636+00:00",
+  "model_version": "fraud-spike-v2-eod",
+  "model_type": "gradient_boosting",
+  "feature_schema_version": "merchant-day-eod-v2",
+  "temporal_generalization": {
+    "status": "reuses_frozen_held_out_evaluation",
+    "source": "evaluation/test_results.json",
+    "test_split_rescored": false,
+    "date_range": [
+      "2026-05-16",
+      "2026-06-29"
+    ],
+    "rows": 6157,
+    "positive_rate": 0.0732,
+    "roc_auc": 0.9903,
+    "pr_auc": 0.95,
+    "disclosure": "The declared final temporal test was not rescored or retuned by this protocol runner."
+  },
+  "merchant_generalization": {
+    "random_state": 42,
+    "merchant_sets_disjoint": true,
+    "train": {
+      "rows": 7922,
+      "merchants": 90,
+      "positive_rate": 0.076622,
+      "date_range": [
+        "2026-01-08",
+        "2026-04-15"
+      ]
+    },
+    "validation": {
+      "rows": 857,
+      "merchants": 30,
+      "positive_rate": 0.066511,
+      "date_range": [
+        "2026-04-16",
+        "2026-05-15"
+      ]
+    },
+    "test": {
+      "rows": 1165,
+      "merchants": 30,
+      "positive_rate": 0.048927,
+      "date_range": [
+        "2026-05-16",
+        "2026-06-29"
+      ]
+    },
+    "protocol": "merchant_disjoint_and_chronological",
+    "frozen_model_family": "hist_gradient_boosting",
+    "validation_ranking": {
+      "rows": 857,
+      "positive_rate": 0.066511,
+      "roc_auc": 0.982456,
+      "pr_auc": 0.860296
+    },
+    "test_ranking": {
+      "rows": 1165,
+      "positive_rate": 0.048927,
+      "roc_auc": 0.980936,
+      "pr_auc": 0.93054
+    },
+    "selection_boundary": "No hyperparameter, model-family, threshold, or calibration choice used the merchant-test cohort."
+  },
+  "ood_generalization": {
+    "benchmark_name": "independent-synthetic-ood-v1",
+    "model_version": "fraud-spike-v2-eod",
+    "model_type": "gradient_boosting",
+    "provenance": {
+      "source": "evaluation/ood_benchmark.py",
+      "type": "independently generated synthetic OOD benchmark",
+      "real_world_validation": false,
+      "training_data_used": false,
+      "disclosure": "This is a separately designed synthetic stress test. It is not an external dataset and must not be interpreted as real-world fraud performance."
+    },
+    "config": {
+      "seed": 20261102,
+      "n_merchants": 110,
+      "n_days": 150,
+      "start_date": "2027-01-01",
+      "fraud_day_rate": 0.06,
+      "max_attack_windows_per_merchant": 3
+    },
+    "raw_merchant_days": 16500,
+    "scored_merchant_days": 15730,
+    "positive_rate": 0.063064,
+    "roc_auc": 0.939,
+    "pr_auc": 0.6681,
+    "review_tier": {
+      "threshold": 0.1,
+      "precision": 0.141,
+      "recall": 0.9698,
+      "f1": 0.2462,
+      "false_positive_rate": 0.3976,
+      "confusion_matrix": {
+        "tp": 962,
+        "fp": 5860,
+        "tn": 8878,
+        "fn": 30
+      }
+    },
+    "high_tier": {
+      "threshold": 0.67,
+      "precision": 0.2164,
+      "recall": 0.9022,
+      "f1": 0.3491,
+      "false_positive_rate": 0.2198,
+      "confusion_matrix": {
+        "tp": 895,
+        "fp": 3240,
+        "tn": 11498,
+        "fn": 97
+      }
+    }
+  },
+  "cold_start": {
+    "rows": 1050,
+    "merchants": 150,
+    "positive_rate": 0.0,
+    "operational_policy": "insufficient_evidence_manual_review",
+    "model_scored_rows": 0,
+    "model_score_coverage": 0.0,
+    "disclosure": "The operational engine intentionally does not score merchant-days without sufficient prior history. This reports coverage and label prevalence, not an artificial cold-start probability metric. A zero positive rate is possible because this simulator requires prior observed days before injecting fraud."
+  },
+  "stress_tests": {
+    "mild_anomalies": {
+      "config": {
+        "seed": 3101,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.07,
+        "max_fraud_windows_per_merchant": 3,
+        "fraud_severity_min": 0.1,
+        "fraud_severity_max": 0.35,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.22,
+        "campaign_fraction": 0.2,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "raw_merchant_days": 16882,
+      "scored_merchant_days": 16182,
+      "ranking": {
+        "rows": 16182,
+        "positive_rate": 0.073044,
+        "roc_auc": 0.897847,
+        "pr_auc": 0.697251
+      },
+      "disclosure": "Synthetic stress evidence only; it is not real-world fraud validation."
+    },
+    "low_prevalence": {
+      "config": {
+        "seed": 3102,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.025,
+        "max_fraud_windows_per_merchant": 3,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.22,
+        "campaign_fraction": 0.2,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "raw_merchant_days": 16210,
+      "scored_merchant_days": 15510,
+      "ranking": {
+        "rows": 15510,
+        "positive_rate": 0.026241,
+        "roc_auc": 0.984084,
+        "pr_auc": 0.901963
+      },
+      "disclosure": "Synthetic stress evidence only; it is not real-world fraud validation."
+    },
+    "high_prevalence": {
+      "config": {
+        "seed": 3103,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.15,
+        "max_fraud_windows_per_merchant": 6,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.22,
+        "campaign_fraction": 0.2,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "raw_merchant_days": 16332,
+      "scored_merchant_days": 15632,
+      "ranking": {
+        "rows": 15632,
+        "positive_rate": 0.15705,
+        "roc_auc": 0.986352,
+        "pr_auc": 0.968384
+      },
+      "disclosure": "Synthetic stress evidence only; it is not real-world fraud validation."
+    },
+    "high_missingness": {
+      "config": {
+        "seed": 3104,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.07,
+        "max_fraud_windows_per_merchant": 3,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.12,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.22,
+        "campaign_fraction": 0.2,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "raw_merchant_days": 14573,
+      "scored_merchant_days": 13873,
+      "ranking": {
+        "rows": 13873,
+        "positive_rate": 0.073596,
+        "roc_auc": 0.979623,
+        "pr_auc": 0.922574
+      },
+      "disclosure": "Synthetic stress evidence only; it is not real-world fraud validation."
+    },
+    "campaign_heavy": {
+      "config": {
+        "seed": 3105,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.07,
+        "max_fraud_windows_per_merchant": 3,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.55,
+        "campaign_fraction": 0.8,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "raw_merchant_days": 16078,
+      "scored_merchant_days": 15378,
+      "ranking": {
+        "rows": 15378,
+        "positive_rate": 0.073221,
+        "roc_auc": 0.979391,
+        "pr_auc": 0.902282
+      },
+      "disclosure": "Synthetic stress evidence only; it is not real-world fraud validation."
+    }
+  },
+  "selection_boundary": "All non-temporal populations are synthetic. This report is evaluation evidence only and does not promote, calibrate, tune, or replace a model."
+}

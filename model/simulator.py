@@ -64,6 +64,8 @@ class SimulationConfig:
     start_date: str = "2026-01-01"
     fraud_day_rate: float = 0.07
     max_fraud_windows_per_merchant: int = 3
+    fraud_severity_min: float = 0.35
+    fraud_severity_max: float = 1.0
     missing_observation_rate: float = 0.015
     delayed_record_rate: float = 0.05
     max_record_delay_days: int = 5
@@ -82,6 +84,8 @@ class SimulationConfig:
             raise ValueError("n_days must be at least 30.")
         if not 0 < self.fraud_day_rate < 0.5:
             raise ValueError("fraud_day_rate must be between 0 and 0.5.")
+        if not 0 < self.fraud_severity_min <= self.fraud_severity_max:
+            raise ValueError("fraud_severity_min must be positive and no greater than fraud_severity_max.")
         for field in (
             "missing_observation_rate", "delayed_record_rate", "cold_start_fraction",
             "churn_fraction", "quiet_period_fraction", "campaign_fraction",
@@ -467,7 +471,7 @@ def inject_fraud_spikes(
         if len(selected) != duration or any(index in positive_rows for index in selected):
             continue
         fraud_type = str(rng.choice(FRAUD_TYPES))
-        severity = float(rng.uniform(0.35, 1.0))
+        severity = float(rng.uniform(config.fraud_severity_min, config.fraud_severity_max))
         for index in selected:
             mutated = output.loc[index].copy()
             _apply_fraud_type(mutated, fraud_type, severity, rng)
