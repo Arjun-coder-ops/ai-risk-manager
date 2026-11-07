@@ -1,0 +1,105 @@
+{
+  "report_kind": "phase-4.1-classical-model-comparison",
+  "generated_at": "2026-11-07T05:48:54.646873+00:00",
+  "random_state": 42,
+  "feature_schema_version": "merchant-day-eod-v2",
+  "feature_columns": [
+    "txn_volume_zscore",
+    "failed_rate_delta",
+    "amount_zscore",
+    "amount_volatility_ratio",
+    "new_user_ratio_delta",
+    "device_diversity_ratio",
+    "region_spread_zscore",
+    "rolling_volume_trend",
+    "weekday_volume_ratio",
+    "txn_volume_percentile",
+    "ewm_volume_zscore",
+    "recent_volume_volatility_ratio",
+    "txn_acceleration_ratio",
+    "trend_adjusted_volume_zscore",
+    "volume_change_point_score",
+    "device_diversity_delta",
+    "historical_anomaly_rate"
+  ],
+  "protocol": {
+    "name": "temporal_validation_only",
+    "train_date_range": [
+      "2026-01-08",
+      "2026-04-15"
+    ],
+    "validation_date_range": [
+      "2026-04-16",
+      "2026-05-15"
+    ],
+    "train_rows": 13303,
+    "validation_rows": 4346,
+    "validation_positive_rate": 0.068569,
+    "test_split_loaded": false
+  },
+  "library_versions": {
+    "scikit_learn": "1.7.2",
+    "xgboost": "2.1.4",
+    "lightgbm": "4.5.0"
+  },
+  "candidates": [
+    {
+      "name": "heuristic_baseline",
+      "description": "Fixed merchant-relative signal rule; ranking baseline only.",
+      "score_kind": "heuristic_score",
+      "eligible_for_production_selection": false,
+      "validation_roc_auc": 0.849514,
+      "validation_pr_auc": 0.443319
+    },
+    {
+      "name": "logistic_regression",
+      "description": "Standardized, class-balanced linear probability baseline.",
+      "score_kind": "probability",
+      "eligible_for_production_selection": true,
+      "validation_roc_auc": 0.964281,
+      "validation_pr_auc": 0.75866
+    },
+    {
+      "name": "random_forest",
+      "description": "Class-balanced non-linear bagging baseline.",
+      "score_kind": "probability",
+      "eligible_for_production_selection": true,
+      "validation_roc_auc": 0.978842,
+      "validation_pr_auc": 0.882146
+    },
+    {
+      "name": "hist_gradient_boosting",
+      "description": "Histogram gradient boosting probability model.",
+      "score_kind": "probability",
+      "eligible_for_production_selection": true,
+      "validation_roc_auc": 0.989622,
+      "validation_pr_auc": 0.931039
+    },
+    {
+      "name": "xgboost",
+      "description": "XGBoost tree-boosting probability model with train-only class weighting.",
+      "score_kind": "probability",
+      "eligible_for_production_selection": true,
+      "validation_roc_auc": 0.987427,
+      "validation_pr_auc": 0.922046
+    },
+    {
+      "name": "lightgbm",
+      "description": "LightGBM leaf-wise boosting probability model with train-only class weighting.",
+      "score_kind": "probability",
+      "eligible_for_production_selection": true,
+      "validation_roc_auc": 0.990356,
+      "validation_pr_auc": 0.930489
+    },
+    {
+      "name": "isolation_forest",
+      "description": "Normal-only unsupervised anomaly-score baseline; not a probability.",
+      "score_kind": "anomaly_score",
+      "eligible_for_production_selection": false,
+      "validation_roc_auc": 0.902535,
+      "validation_pr_auc": 0.469292
+    }
+  ],
+  "validation_leader_among_probability_models": "hist_gradient_boosting",
+  "selection_boundary": "This report does not promote or replace the deployed model. Heuristic and Isolation Forest scores are ranking baselines, not calibrated fraud probabilities. Promotion requires the remaining Phase 4 protocols, calibration, robustness, and ablation evidence."
+}

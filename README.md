@@ -142,6 +142,12 @@ after training and validation, touched exactly once.
 Model comparison on validation (PR-AUC): Logistic Regression 0.753, Random
 Forest 0.882, **Gradient Boosting 0.931 (selected)**.
 
+The required Phase 4.1 classical candidate suite (including a transparent
+heuristic, Isolation Forest, XGBoost, and LightGBM) is kept separate from the
+currently deployed model while the remaining evaluation and calibration gates
+are implemented. Its reproducible protocol and selection boundary are in
+[`docs/classical-experiments.md`](docs/classical-experiments.md).
+
 ## Independent synthetic OOD stress test
 
 The held-out result above is synthetic **in-distribution** evidence only. A
@@ -312,7 +318,7 @@ strict request contract, state model, and operational limits.
 
 - Data is synthetic; real-world merchant behaviour is messier and this
   hasn't been validated against real fraud patterns.
-- Only 8 features, all daily-aggregate — a production system would likely
+- The model uses 17 end-of-day daily-aggregate features. A production system would likely
   add transaction-level (not just daily-aggregate) signals and richer
   device/network graph features.
 - Cost assumptions are illustrative placeholders, not calibrated to real
