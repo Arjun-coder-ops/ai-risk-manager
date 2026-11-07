@@ -1,0 +1,287 @@
+{
+  "report_kind": "phase-4.4-calibration-experiment",
+  "generated_at": "2026-11-07T17:40:01.473790+00:00",
+  "feature_schema_version": "merchant-day-eod-v2",
+  "base_model": "hist_gradient_boosting",
+  "partitions": {
+    "fit": {
+      "date_range": [
+        "2026-01-08",
+        "2026-03-15"
+      ],
+      "rows": 8742,
+      "positive_rate": 0.071723
+    },
+    "calibration_fit": {
+      "date_range": [
+        "2026-03-16",
+        "2026-03-31"
+      ],
+      "rows": 2304,
+      "positive_rate": 0.072049
+    },
+    "calibration_method_selection": {
+      "date_range": [
+        "2026-04-01",
+        "2026-04-15"
+      ],
+      "rows": 2179,
+      "positive_rate": 0.056907
+    },
+    "fit_end": "2026-03-15",
+    "calibration_fit_end": "2026-03-31",
+    "calibration_method_selection_end": "2026-04-15",
+    "purged_boundary_spanning_fraud_events": 15,
+    "purged_rows": 78,
+    "selection_validation_period": [
+      "2026-04-16",
+      "2026-05-15"
+    ],
+    "final_test_period": [
+      "2026-05-16",
+      "2026-06-29"
+    ]
+  },
+  "selection_rule": "A calibrated method must strictly beat raw on untouched calibration-method-selection Brier score; ECE then method name are deterministic tie-breaks among equal-Brier calibrated candidates.",
+  "candidates": {
+    "raw": {
+      "calibration": {
+        "score_semantics": "uncalibrated_model_probability",
+        "brier_score": 0.009472,
+        "expected_calibration_error": 0.005844,
+        "bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 2024,
+            "observed_positive_rate": 0.003953,
+            "mean_score": 0.005863
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 21,
+            "observed_positive_rate": 0.095238,
+            "mean_score": 0.134601
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 8,
+            "observed_positive_rate": 0.375,
+            "mean_score": 0.256707
+          },
+          {
+            "lower": 0.3,
+            "upper": 0.4,
+            "count": 7,
+            "observed_positive_rate": 0.285714,
+            "mean_score": 0.338961
+          },
+          {
+            "lower": 0.4,
+            "upper": 0.5,
+            "count": 9,
+            "observed_positive_rate": 0.666667,
+            "mean_score": 0.453838
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 5,
+            "observed_positive_rate": 0.6,
+            "mean_score": 0.540479
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 4,
+            "observed_positive_rate": 0.5,
+            "mean_score": 0.652777
+          },
+          {
+            "lower": 0.7,
+            "upper": 0.8,
+            "count": 9,
+            "observed_positive_rate": 0.777778,
+            "mean_score": 0.739613
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 19,
+            "observed_positive_rate": 0.947368,
+            "mean_score": 0.858828
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 73,
+            "observed_positive_rate": 1.0,
+            "mean_score": 0.974368
+          }
+        ]
+      },
+      "ranking": {
+        "rows": 2179,
+        "positive_rate": 0.056907,
+        "roc_auc": 0.991755,
+        "pr_auc": 0.948035
+      }
+    },
+    "sigmoid": {
+      "calibration": {
+        "score_semantics": "sigmoid_calibration_adjusted_probability",
+        "brier_score": 0.010276,
+        "expected_calibration_error": 0.006022,
+        "bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 2054,
+            "observed_positive_rate": 0.006329,
+            "mean_score": 0.008644
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 6,
+            "observed_positive_rate": 0.333333,
+            "mean_score": 0.131507
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 6,
+            "observed_positive_rate": 0.666667,
+            "mean_score": 0.258483
+          },
+          {
+            "lower": 0.3,
+            "upper": 0.4,
+            "count": 4,
+            "observed_positive_rate": 0.5,
+            "mean_score": 0.344579
+          },
+          {
+            "lower": 0.4,
+            "upper": 0.5,
+            "count": 3,
+            "observed_positive_rate": 0.666667,
+            "mean_score": 0.435535
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 2,
+            "observed_positive_rate": 0.5,
+            "mean_score": 0.559726
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 1,
+            "observed_positive_rate": 1.0,
+            "mean_score": 0.695255
+          },
+          {
+            "lower": 0.7,
+            "upper": 0.8,
+            "count": 6,
+            "observed_positive_rate": 0.666667,
+            "mean_score": 0.764602
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 8,
+            "observed_positive_rate": 0.875,
+            "mean_score": 0.858967
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 89,
+            "observed_positive_rate": 0.988764,
+            "mean_score": 0.963461
+          }
+        ]
+      },
+      "ranking": {
+        "rows": 2179,
+        "positive_rate": 0.056907,
+        "roc_auc": 0.991755,
+        "pr_auc": 0.948035
+      }
+    },
+    "isotonic": {
+      "calibration": {
+        "score_semantics": "isotonic_calibration_adjusted_probability",
+        "brier_score": 0.009968,
+        "expected_calibration_error": 0.004585,
+        "bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 2034,
+            "observed_positive_rate": 0.004425,
+            "mean_score": 0.004508
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 10,
+            "observed_positive_rate": 0.1,
+            "mean_score": 0.167554
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 17,
+            "observed_positive_rate": 0.352941,
+            "mean_score": 0.25
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 5,
+            "observed_positive_rate": 0.6,
+            "mean_score": 0.6
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 21,
+            "observed_positive_rate": 0.666667,
+            "mean_score": 0.681175
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 37,
+            "observed_positive_rate": 0.972973,
+            "mean_score": 0.8
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 55,
+            "observed_positive_rate": 1.0,
+            "mean_score": 0.987438
+          }
+        ]
+      },
+      "ranking": {
+        "rows": 2179,
+        "positive_rate": 0.056907,
+        "roc_auc": 0.992438,
+        "pr_auc": 0.936729
+      }
+    }
+  },
+  "selected_method": null,
+  "retained_candidate_artifact": null,
+  "candidate_status": "no_calibrated_candidate_retained",
+  "serving_boundary": "The active serving model and thresholds remain unchanged. No calibrated score scale is available for serving because neither calibration method beat raw scores on the untouched calibration-selection period.",
+  "probability_disclosure": "No adjusted probability estimate is retained. The active raw score is not a reliable real-world fraud probability."
+}

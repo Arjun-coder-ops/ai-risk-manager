@@ -158,6 +158,11 @@ calibration, cost-sensitivity, and cluster-bootstrap uncertainty evidence for
 the frozen artifact. It does not select, calibrate, or promote a model; see
 [`docs/decision-metrics.md`](docs/decision-metrics.md).
 
+Phase 4.4 compares sigmoid and isotonic calibration on a dedicated,
+chronological calibration-selection period. Neither improved the primary Brier
+criterion, so no calibrated candidate is retained or deployed; see
+[`docs/calibration-experiment.md`](docs/calibration-experiment.md).
+
 ## Independent synthetic OOD stress test
 
 The held-out result above is synthetic **in-distribution** evidence only. A
@@ -370,6 +375,9 @@ ai-risk-manager/
 │   ├── test_results.json         # actual measured results (generated)
 │   ├── run_decision_metrics.py   # reproducible Phase 4.3 metric report
 │   ├── decision_metrics.json     # frozen-artifact decision evidence
+│   ├── run_calibration_experiment.py # chronological calibration comparison
+│   ├── calibration_report.json   # sigmoid/isotonic selection evidence
+│   ├── calibration_reliability.svg # reliability diagram
 │   └── audit_log.jsonl           # runtime audit trail (generated)
 ├── tests/test_risk_engine.py    # feature leakage, policy, failure-handling tests
 ├── data/                         # generated CSVs (raw + processed)

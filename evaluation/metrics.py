@@ -81,8 +81,14 @@ def review_budget_metrics(labels: np.ndarray, scores: np.ndarray, review_budget_
     }
 
 
-def calibration_metrics(labels: np.ndarray, scores: np.ndarray, bins: int = DEFAULT_CALIBRATION_BINS) -> dict[str, Any]:
-    """Report raw-probability Brier score and uniform-bin expected calibration error."""
+def calibration_metrics(
+    labels: np.ndarray,
+    scores: np.ndarray,
+    bins: int = DEFAULT_CALIBRATION_BINS,
+    *,
+    score_semantics: str = "uncalibrated_model_probability",
+) -> dict[str, Any]:
+    """Report Brier score and uniform-bin expected calibration error with score semantics."""
     labels, scores = _binary_inputs(labels, scores)
     if bins < 2:
         raise ValueError("bins must be at least two.")
@@ -106,7 +112,7 @@ def calibration_metrics(labels: np.ndarray, scores: np.ndarray, bins: int = DEFA
             "mean_score": round(mean_score, 6),
         })
     return {
-        "score_semantics": "uncalibrated_model_probability",
+        "score_semantics": score_semantics,
         "brier_score": round(float(brier_score_loss(labels, scores)), 6),
         "expected_calibration_error": round(float(ece), 6),
         "bins": details,

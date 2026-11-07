@@ -46,6 +46,7 @@ def test_calibration_metrics_and_merchant_bootstrap_are_deterministic():
     calibration = calibration_metrics(labels, scores, bins=2)
     assert calibration["brier_score"] == 0.255
     assert calibration["expected_calibration_error"] >= 0
+    assert calibration["score_semantics"] == "uncalibrated_model_probability"
     scored = pd.DataFrame({
         "merchant_id": ["A", "A", "B", "B"],
         "label_fraud_spike": labels,

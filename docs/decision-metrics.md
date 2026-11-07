@@ -39,8 +39,9 @@ metric, not a replacement policy.
 The artifact currently emits **uncalibrated model probabilities**. On the
 frozen test slice, the raw Brier score is 0.010649 and the ten-uniform-bin ECE
 is 0.003681. These descriptive values must not be treated as proof that scores
-are calibrated in production. Phase 4.4 evaluates calibration methods without
-using the temporal test set for method selection.
+are calibrated in production. Phase 4.4 evaluated sigmoid and isotonic methods
+without using the temporal test set; neither beat raw Brier on its independent
+calibration-selection period, so no calibrated candidate was retained.
 
 ### Cost sensitivity
 
