@@ -163,6 +163,12 @@ chronological calibration-selection period. Neither improved the primary Brier
 criterion, so no calibrated candidate is retained or deployed; see
 [`docs/calibration-experiment.md`](docs/calibration-experiment.md).
 
+Phase 4.5 records robustness evidence across anomaly severity, merchant-size
+proxies, campaigns, record quality, distribution shift, label noise,
+prevalence, and temporal drift. It exposes severe synthetic campaign, OOD, and
+late-drift false-positive failures; see
+[`docs/robustness-tests.md`](docs/robustness-tests.md).
+
 ## Independent synthetic OOD stress test
 
 The held-out result above is synthetic **in-distribution** evidence only. A
@@ -378,6 +384,8 @@ ai-risk-manager/
 │   ├── run_calibration_experiment.py # chronological calibration comparison
 │   ├── calibration_report.json   # sigmoid/isotonic selection evidence
 │   ├── calibration_reliability.svg # reliability diagram
+│   ├── run_robustness_tests.py   # Phase 4.5 frozen-model stress suite
+│   ├── robustness_tests.json     # robustness evidence and failure modes
 │   └── audit_log.jsonl           # runtime audit trail (generated)
 ├── tests/test_risk_engine.py    # feature leakage, policy, failure-handling tests
 ├── data/                         # generated CSVs (raw + processed)

@@ -1,0 +1,970 @@
+{
+  "report_kind": "phase-4.5-robustness-tests",
+  "generated_at": "2026-11-07T18:12:35.399946+00:00",
+  "model_version": "fraud-spike-v2-eod",
+  "model_type": "gradient_boosting",
+  "feature_schema_version": "merchant-day-eod-v2",
+  "scenarios": {
+    "previously_unseen_anomaly_severity": {
+      "config": {
+        "seed": 4501,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.07,
+        "max_fraud_windows_per_merchant": 5,
+        "fraud_severity_min": 1.05,
+        "fraud_severity_max": 1.6,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.22,
+        "campaign_fraction": 0.2,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "definition": "Fraud severities 1.05-1.60, outside the training simulator's 0.35-1.00 range.",
+      "result": {
+        "raw_merchant_days": 16690,
+        "scored_merchant_days": 15990,
+        "scored_positive_rate": 0.073296,
+        "ranking": {
+          "rows": 15990,
+          "positive_rate": 0.073296,
+          "roc_auc": 0.995663,
+          "pr_auc": 0.977429
+        },
+        "review_tier": {
+          "threshold": 0.1,
+          "precision": 0.826628,
+          "recall": 0.964164,
+          "f1": 0.890114,
+          "false_positive_rate": 0.015994,
+          "false_alerts_per_1000_merchant_days": 14.821764,
+          "alerts": 1367,
+          "confusion_matrix": {
+            "tp": 1130,
+            "fp": 237,
+            "tn": 14581,
+            "fn": 42
+          }
+        },
+        "high_tier": {
+          "threshold": 0.67,
+          "precision": 0.970988,
+          "recall": 0.913823,
+          "f1": 0.941538,
+          "false_positive_rate": 0.00216,
+          "false_alerts_per_1000_merchant_days": 2.001251,
+          "alerts": 1103,
+          "confusion_matrix": {
+            "tp": 1071,
+            "fp": 32,
+            "tn": 14786,
+            "fn": 101
+          }
+        }
+      }
+    },
+    "merchant_size_variation": {
+      "config": {
+        "seed": 4502,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.07,
+        "max_fraud_windows_per_merchant": 5,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.0,
+        "campaign_fraction": 1.0,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "overall": {
+        "raw_merchant_days": 16868,
+        "scored_merchant_days": 16168,
+        "scored_positive_rate": 0.073355,
+        "ranking": {
+          "rows": 16168,
+          "positive_rate": 0.073355,
+          "roc_auc": 0.983184,
+          "pr_auc": 0.914145
+        },
+        "review_tier": {
+          "threshold": 0.1,
+          "precision": 0.670567,
+          "recall": 0.918212,
+          "f1": 0.775089,
+          "false_positive_rate": 0.03571,
+          "false_alerts_per_1000_merchant_days": 33.090054,
+          "alerts": 1624,
+          "confusion_matrix": {
+            "tp": 1089,
+            "fp": 535,
+            "tn": 14447,
+            "fn": 97
+          }
+        },
+        "high_tier": {
+          "threshold": 0.67,
+          "precision": 0.894495,
+          "recall": 0.822091,
+          "f1": 0.856766,
+          "false_positive_rate": 0.007676,
+          "false_alerts_per_1000_merchant_days": 7.112815,
+          "alerts": 1090,
+          "confusion_matrix": {
+            "tp": 975,
+            "fp": 115,
+            "tn": 14867,
+            "fn": 211
+          }
+        }
+      },
+      "slices_by_simulator_archetype": {
+        "large": {
+          "rows": 2736,
+          "positive_rate": 0.083333,
+          "ranking": {
+            "rows": 2736,
+            "positive_rate": 0.083333,
+            "roc_auc": 0.991695,
+            "pr_auc": 0.945585
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.748227,
+            "recall": 0.925439,
+            "f1": 0.827451,
+            "false_positive_rate": 0.028309,
+            "false_alerts_per_1000_merchant_days": 25.950292,
+            "alerts": 282,
+            "confusion_matrix": {
+              "tp": 211,
+              "fp": 71,
+              "tn": 2437,
+              "fn": 17
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.916667,
+            "recall": 0.820175,
+            "f1": 0.865741,
+            "false_positive_rate": 0.006778,
+            "false_alerts_per_1000_merchant_days": 6.21345,
+            "alerts": 204,
+            "confusion_matrix": {
+              "tp": 187,
+              "fp": 17,
+              "tn": 2491,
+              "fn": 41
+            }
+          }
+        },
+        "medium": {
+          "rows": 4541,
+          "positive_rate": 0.082581,
+          "ranking": {
+            "rows": 4541,
+            "positive_rate": 0.082581,
+            "roc_auc": 0.988322,
+            "pr_auc": 0.940687
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.78125,
+            "recall": 0.933333,
+            "f1": 0.850547,
+            "false_positive_rate": 0.023524,
+            "false_alerts_per_1000_merchant_days": 21.58115,
+            "alerts": 448,
+            "confusion_matrix": {
+              "tp": 350,
+              "fp": 98,
+              "tn": 4068,
+              "fn": 25
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.931548,
+            "recall": 0.834667,
+            "f1": 0.88045,
+            "false_positive_rate": 0.005521,
+            "false_alerts_per_1000_merchant_days": 5.064964,
+            "alerts": 336,
+            "confusion_matrix": {
+              "tp": 313,
+              "fp": 23,
+              "tn": 4143,
+              "fn": 62
+            }
+          }
+        },
+        "small": {
+          "rows": 8891,
+          "positive_rate": 0.065572,
+          "ranking": {
+            "rows": 8891,
+            "positive_rate": 0.065572,
+            "roc_auc": 0.976795,
+            "pr_auc": 0.88942
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.590604,
+            "recall": 0.90566,
+            "f1": 0.714963,
+            "false_positive_rate": 0.044054,
+            "false_alerts_per_1000_merchant_days": 41.165223,
+            "alerts": 894,
+            "confusion_matrix": {
+              "tp": 528,
+              "fp": 366,
+              "tn": 7942,
+              "fn": 55
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.863636,
+            "recall": 0.814751,
+            "f1": 0.838482,
+            "false_positive_rate": 0.009027,
+            "false_alerts_per_1000_merchant_days": 8.435497,
+            "alerts": 550,
+            "confusion_matrix": {
+              "tp": 475,
+              "fp": 75,
+              "tn": 8233,
+              "fn": 108
+            }
+          }
+        }
+      },
+      "disclosure": "Archetypes are synthetic merchant-size proxies, not real merchant segments."
+    },
+    "legitimate_high_volume_events": {
+      "config": {
+        "seed": 4502,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.07,
+        "max_fraud_windows_per_merchant": 5,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.0,
+        "campaign_fraction": 1.0,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "definition": "Every eligible merchant is offered a label-negative legitimate campaign event.",
+      "negative_campaign_alerts": {
+        "scoreable_negative_campaign_days": 376,
+        "review_false_alert_rate": 0.933511,
+        "high_false_alert_rate": 0.289894,
+        "review_false_alerts_per_1000_campaign_days": 933.510638,
+        "high_false_alerts_per_1000_campaign_days": 289.893617
+      }
+    },
+    "missing_records": {
+      "config": {
+        "seed": 4503,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.07,
+        "max_fraud_windows_per_merchant": 5,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.2,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.22,
+        "campaign_fraction": 0.2,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "definition": "20% missing-observation rate versus the baseline simulator's 1.5%.",
+      "result": {
+        "raw_merchant_days": 13440,
+        "scored_merchant_days": 12708,
+        "scored_positive_rate": 0.074127,
+        "ranking": {
+          "rows": 12708,
+          "positive_rate": 0.074127,
+          "roc_auc": 0.977655,
+          "pr_auc": 0.922201
+        },
+        "review_tier": {
+          "threshold": 0.1,
+          "precision": 0.797883,
+          "recall": 0.880042,
+          "f1": 0.836951,
+          "false_positive_rate": 0.017848,
+          "false_alerts_per_1000_merchant_days": 16.525024,
+          "alerts": 1039,
+          "confusion_matrix": {
+            "tp": 829,
+            "fp": 210,
+            "tn": 11556,
+            "fn": 113
+          }
+        },
+        "high_tier": {
+          "threshold": 0.67,
+          "precision": 0.976776,
+          "recall": 0.759023,
+          "f1": 0.854241,
+          "false_positive_rate": 0.001445,
+          "false_alerts_per_1000_merchant_days": 1.33774,
+          "alerts": 732,
+          "confusion_matrix": {
+            "tp": 715,
+            "fp": 17,
+            "tn": 11749,
+            "fn": 227
+          }
+        }
+      }
+    },
+    "delayed_records": {
+      "config": {
+        "seed": 4504,
+        "n_merchants": 100,
+        "n_days": 180,
+        "start_date": "2026-01-01",
+        "fraud_day_rate": 0.07,
+        "max_fraud_windows_per_merchant": 5,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.45,
+        "max_record_delay_days": 7,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.22,
+        "campaign_fraction": 0.2,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "definition": "45% delayed-record rate; only rows available by their own end-of-day are scoreable.",
+      "original_observations": 16835,
+      "same_day_available_observations": 9323,
+      "same_day_availability_coverage": 0.553787,
+      "result": {
+        "raw_merchant_days": 9323,
+        "scored_merchant_days": 6340,
+        "scored_positive_rate": 0.067823,
+        "ranking": {
+          "rows": 6340,
+          "positive_rate": 0.067823,
+          "roc_auc": 0.964113,
+          "pr_auc": 0.897316
+        },
+        "review_tier": {
+          "threshold": 0.1,
+          "precision": 0.763485,
+          "recall": 0.855814,
+          "f1": 0.807018,
+          "false_positive_rate": 0.019289,
+          "false_alerts_per_1000_merchant_days": 17.981073,
+          "alerts": 482,
+          "confusion_matrix": {
+            "tp": 368,
+            "fp": 114,
+            "tn": 5796,
+            "fn": 62
+          }
+        },
+        "high_tier": {
+          "threshold": 0.67,
+          "precision": 0.972644,
+          "recall": 0.744186,
+          "f1": 0.843215,
+          "false_positive_rate": 0.001523,
+          "false_alerts_per_1000_merchant_days": 1.419558,
+          "alerts": 329,
+          "confusion_matrix": {
+            "tp": 320,
+            "fp": 9,
+            "tn": 5901,
+            "fn": 110
+          }
+        }
+      }
+    },
+    "distribution_shift": {
+      "benchmark_name": "independent-synthetic-ood-v1",
+      "model_version": "fraud-spike-v2-eod",
+      "model_type": "gradient_boosting",
+      "provenance": {
+        "source": "evaluation/ood_benchmark.py",
+        "type": "independently generated synthetic OOD benchmark",
+        "real_world_validation": false,
+        "training_data_used": false,
+        "disclosure": "This is a separately designed synthetic stress test. It is not an external dataset and must not be interpreted as real-world fraud performance."
+      },
+      "config": {
+        "seed": 20261102,
+        "n_merchants": 110,
+        "n_days": 150,
+        "start_date": "2027-01-01",
+        "fraud_day_rate": 0.06,
+        "max_attack_windows_per_merchant": 3
+      },
+      "raw_merchant_days": 16500,
+      "scored_merchant_days": 15730,
+      "positive_rate": 0.063064,
+      "roc_auc": 0.939,
+      "pr_auc": 0.6681,
+      "review_tier": {
+        "threshold": 0.1,
+        "precision": 0.141,
+        "recall": 0.9698,
+        "f1": 0.2462,
+        "false_positive_rate": 0.3976,
+        "confusion_matrix": {
+          "tp": 962,
+          "fp": 5860,
+          "tn": 8878,
+          "fn": 30
+        }
+      },
+      "high_tier": {
+        "threshold": 0.67,
+        "precision": 0.2164,
+        "recall": 0.9022,
+        "f1": 0.3491,
+        "false_positive_rate": 0.2198,
+        "confusion_matrix": {
+          "tp": 895,
+          "fp": 3240,
+          "tn": 11498,
+          "fn": 97
+        }
+      }
+    },
+    "noisy_labels": {
+      "definition": "10% symmetric evaluation-label flips; latent labels and model scores are unchanged.",
+      "rows": 16168,
+      "flipped_rows": 1638,
+      "latent_label_metrics": {
+        "rows": 16168,
+        "positive_rate": 0.073355,
+        "ranking": {
+          "rows": 16168,
+          "positive_rate": 0.073355,
+          "roc_auc": 0.983184,
+          "pr_auc": 0.914145
+        },
+        "review_tier": {
+          "threshold": 0.1,
+          "precision": 0.670567,
+          "recall": 0.918212,
+          "f1": 0.775089,
+          "false_positive_rate": 0.03571,
+          "false_alerts_per_1000_merchant_days": 33.090054,
+          "alerts": 1624,
+          "confusion_matrix": {
+            "tp": 1089,
+            "fp": 535,
+            "tn": 14447,
+            "fn": 97
+          }
+        },
+        "high_tier": {
+          "threshold": 0.67,
+          "precision": 0.894495,
+          "recall": 0.822091,
+          "f1": 0.856766,
+          "false_positive_rate": 0.007676,
+          "false_alerts_per_1000_merchant_days": 7.112815,
+          "alerts": 1090,
+          "confusion_matrix": {
+            "tp": 975,
+            "fp": 115,
+            "tn": 14867,
+            "fn": 211
+          }
+        }
+      },
+      "noisy_observed_label_metrics": {
+        "ranking": {
+          "rows": 16168,
+          "positive_rate": 0.160564,
+          "roc_auc": 0.692548,
+          "pr_auc": 0.507064
+        },
+        "review_tier": {
+          "threshold": 0.1,
+          "precision": 0.641626,
+          "recall": 0.401387,
+          "f1": 0.493839,
+          "false_positive_rate": 0.042882,
+          "false_alerts_per_1000_merchant_days": 35.997031,
+          "alerts": 1624,
+          "confusion_matrix": {
+            "tp": 1042,
+            "fp": 582,
+            "tn": 12990,
+            "fn": 1554
+          }
+        },
+        "high_tier": {
+          "threshold": 0.67,
+          "precision": 0.825688,
+          "recall": 0.346687,
+          "f1": 0.488334,
+          "false_positive_rate": 0.013999,
+          "false_alerts_per_1000_merchant_days": 11.751608,
+          "alerts": 1090,
+          "confusion_matrix": {
+            "tp": 900,
+            "fp": 190,
+            "tn": 13382,
+            "fn": 1696
+          }
+        }
+      }
+    },
+    "changing_class_prevalence": {
+      "low_prevalence": {
+        "config": {
+          "seed": 4505,
+          "n_merchants": 100,
+          "n_days": 180,
+          "start_date": "2026-01-01",
+          "fraud_day_rate": 0.025,
+          "max_fraud_windows_per_merchant": 4,
+          "fraud_severity_min": 0.35,
+          "fraud_severity_max": 1.0,
+          "missing_observation_rate": 0.015,
+          "delayed_record_rate": 0.05,
+          "max_record_delay_days": 5,
+          "cold_start_fraction": 0.18,
+          "cold_start_max_day": 75,
+          "churn_fraction": 0.1,
+          "quiet_period_fraction": 0.22,
+          "campaign_fraction": 0.2,
+          "min_active_days": 60,
+          "holiday_day_offsets": [
+            26,
+            75,
+            126,
+            160
+          ]
+        },
+        "result": {
+          "raw_merchant_days": 16555,
+          "scored_merchant_days": 15855,
+          "scored_positive_rate": 0.026301,
+          "ranking": {
+            "rows": 15855,
+            "positive_rate": 0.026301,
+            "roc_auc": 0.980863,
+            "pr_auc": 0.906793
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.64467,
+            "recall": 0.913669,
+            "f1": 0.755952,
+            "false_positive_rate": 0.013603,
+            "false_alerts_per_1000_merchant_days": 13.245033,
+            "alerts": 591,
+            "confusion_matrix": {
+              "tp": 381,
+              "fp": 210,
+              "tn": 15228,
+              "fn": 36
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.946629,
+            "recall": 0.808153,
+            "f1": 0.871928,
+            "false_positive_rate": 0.001231,
+            "false_alerts_per_1000_merchant_days": 1.19836,
+            "alerts": 356,
+            "confusion_matrix": {
+              "tp": 337,
+              "fp": 19,
+              "tn": 15419,
+              "fn": 80
+            }
+          }
+        }
+      },
+      "high_prevalence": {
+        "config": {
+          "seed": 4506,
+          "n_merchants": 100,
+          "n_days": 180,
+          "start_date": "2026-01-01",
+          "fraud_day_rate": 0.15,
+          "max_fraud_windows_per_merchant": 8,
+          "fraud_severity_min": 0.35,
+          "fraud_severity_max": 1.0,
+          "missing_observation_rate": 0.015,
+          "delayed_record_rate": 0.05,
+          "max_record_delay_days": 5,
+          "cold_start_fraction": 0.18,
+          "cold_start_max_day": 75,
+          "churn_fraction": 0.1,
+          "quiet_period_fraction": 0.22,
+          "campaign_fraction": 0.2,
+          "min_active_days": 60,
+          "holiday_day_offsets": [
+            26,
+            75,
+            126,
+            160
+          ]
+        },
+        "result": {
+          "raw_merchant_days": 17069,
+          "scored_merchant_days": 16369,
+          "scored_positive_rate": 0.156638,
+          "ranking": {
+            "rows": 16369,
+            "positive_rate": 0.156638,
+            "roc_auc": 0.984573,
+            "pr_auc": 0.958365
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.898266,
+            "recall": 0.909126,
+            "f1": 0.903664,
+            "false_positive_rate": 0.019124,
+            "false_alerts_per_1000_merchant_days": 16.128047,
+            "alerts": 2595,
+            "confusion_matrix": {
+              "tp": 2331,
+              "fp": 264,
+              "tn": 13541,
+              "fn": 233
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.979661,
+            "recall": 0.789002,
+            "f1": 0.874055,
+            "false_positive_rate": 0.003042,
+            "false_alerts_per_1000_merchant_days": 2.565826,
+            "alerts": 2065,
+            "confusion_matrix": {
+              "tp": 2023,
+              "fp": 42,
+              "tn": 13763,
+              "fn": 541
+            }
+          }
+        }
+      }
+    },
+    "model_degradation_over_time": {
+      "config": {
+        "seed": 4507,
+        "n_merchants": 100,
+        "n_days": 360,
+        "start_date": "2028-01-01",
+        "fraud_day_rate": 0.035,
+        "max_fraud_windows_per_merchant": 7,
+        "fraud_severity_min": 0.35,
+        "fraud_severity_max": 1.0,
+        "missing_observation_rate": 0.015,
+        "delayed_record_rate": 0.05,
+        "max_record_delay_days": 5,
+        "cold_start_fraction": 0.18,
+        "cold_start_max_day": 75,
+        "churn_fraction": 0.1,
+        "quiet_period_fraction": 0.22,
+        "campaign_fraction": 0.2,
+        "min_active_days": 60,
+        "holiday_day_offsets": [
+          26,
+          75,
+          126,
+          160
+        ]
+      },
+      "induced_shift": {
+        "definition": "After day 150, label-negative and label-positive rows receive gradual global product-mix volume and amount drift.",
+        "daily_volume_growth": 0.003,
+        "daily_amount_growth": 0.0015
+      },
+      "overall": {
+        "raw_merchant_days": 34157,
+        "scored_merchant_days": 33457,
+        "scored_positive_rate": 0.035747,
+        "ranking": {
+          "rows": 33457,
+          "positive_rate": 0.035747,
+          "roc_auc": 0.976654,
+          "pr_auc": 0.766741
+        },
+        "review_tier": {
+          "threshold": 0.1,
+          "precision": 0.393571,
+          "recall": 0.921405,
+          "f1": 0.551552,
+          "false_positive_rate": 0.052633,
+          "false_alerts_per_1000_merchant_days": 50.751711,
+          "alerts": 2800,
+          "confusion_matrix": {
+            "tp": 1102,
+            "fp": 1698,
+            "tn": 30563,
+            "fn": 94
+          }
+        },
+        "high_tier": {
+          "threshold": 0.67,
+          "precision": 0.477473,
+          "recall": 0.815217,
+          "f1": 0.602224,
+          "false_positive_rate": 0.033074,
+          "false_alerts_per_1000_merchant_days": 31.891682,
+          "alerts": 2042,
+          "confusion_matrix": {
+            "tp": 975,
+            "fp": 1067,
+            "tn": 31194,
+            "fn": 221
+          }
+        }
+      },
+      "chronological_90_day_windows": {
+        "days_1_to_90": {
+          "date_range": [
+            "2028-01-08",
+            "2028-04-06"
+          ],
+          "rows": 8304,
+          "positive_rate": 0.03685,
+          "ranking": {
+            "rows": 8304,
+            "positive_rate": 0.03685,
+            "roc_auc": 0.991624,
+            "pr_auc": 0.941588
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.719388,
+            "recall": 0.921569,
+            "f1": 0.808023,
+            "false_positive_rate": 0.013753,
+            "false_alerts_per_1000_merchant_days": 13.246628,
+            "alerts": 392,
+            "confusion_matrix": {
+              "tp": 282,
+              "fp": 110,
+              "tn": 7888,
+              "fn": 24
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.976834,
+            "recall": 0.826797,
+            "f1": 0.895575,
+            "false_positive_rate": 0.00075,
+            "false_alerts_per_1000_merchant_days": 0.722543,
+            "alerts": 259,
+            "confusion_matrix": {
+              "tp": 253,
+              "fp": 6,
+              "tn": 7992,
+              "fn": 53
+            }
+          }
+        },
+        "days_91_to_180": {
+          "date_range": [
+            "2028-04-07",
+            "2028-07-05"
+          ],
+          "rows": 8900,
+          "positive_rate": 0.032247,
+          "ranking": {
+            "rows": 8900,
+            "positive_rate": 0.032247,
+            "roc_auc": 0.984439,
+            "pr_auc": 0.906816
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.640587,
+            "recall": 0.912892,
+            "f1": 0.752874,
+            "false_positive_rate": 0.017067,
+            "false_alerts_per_1000_merchant_days": 16.516854,
+            "alerts": 409,
+            "confusion_matrix": {
+              "tp": 262,
+              "fp": 147,
+              "tn": 8466,
+              "fn": 25
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.945148,
+            "recall": 0.780488,
+            "f1": 0.854962,
+            "false_positive_rate": 0.001509,
+            "false_alerts_per_1000_merchant_days": 1.460674,
+            "alerts": 237,
+            "confusion_matrix": {
+              "tp": 224,
+              "fp": 13,
+              "tn": 8600,
+              "fn": 63
+            }
+          }
+        },
+        "days_181_to_270": {
+          "date_range": [
+            "2028-07-06",
+            "2028-10-03"
+          ],
+          "rows": 8632,
+          "positive_rate": 0.039041,
+          "ranking": {
+            "rows": 8632,
+            "positive_rate": 0.039041,
+            "roc_auc": 0.98733,
+            "pr_auc": 0.921859
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.683628,
+            "recall": 0.916914,
+            "f1": 0.78327,
+            "false_positive_rate": 0.017239,
+            "false_alerts_per_1000_merchant_days": 16.566265,
+            "alerts": 452,
+            "confusion_matrix": {
+              "tp": 309,
+              "fp": 143,
+              "tn": 8152,
+              "fn": 28
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.945205,
+            "recall": 0.818991,
+            "f1": 0.877583,
+            "false_positive_rate": 0.001929,
+            "false_alerts_per_1000_merchant_days": 1.853568,
+            "alerts": 292,
+            "confusion_matrix": {
+              "tp": 276,
+              "fp": 16,
+              "tn": 8279,
+              "fn": 61
+            }
+          }
+        },
+        "days_271_to_360": {
+          "date_range": [
+            "2028-10-04",
+            "2028-12-25"
+          ],
+          "rows": 7621,
+          "positive_rate": 0.034904,
+          "ranking": {
+            "rows": 7621,
+            "positive_rate": 0.034904,
+            "roc_auc": 0.942852,
+            "pr_auc": 0.618582
+          },
+          "review_tier": {
+            "threshold": 0.1,
+            "precision": 0.160957,
+            "recall": 0.93609,
+            "f1": 0.274683,
+            "false_positive_rate": 0.176479,
+            "false_alerts_per_1000_merchant_days": 170.318856,
+            "alerts": 1547,
+            "confusion_matrix": {
+              "tp": 249,
+              "fp": 1298,
+              "tn": 6057,
+              "fn": 17
+            }
+          },
+          "high_tier": {
+            "threshold": 0.67,
+            "precision": 0.177033,
+            "recall": 0.834586,
+            "f1": 0.292105,
+            "false_positive_rate": 0.140313,
+            "false_alerts_per_1000_merchant_days": 135.4153,
+            "alerts": 1254,
+            "confusion_matrix": {
+              "tp": 222,
+              "fp": 1032,
+              "tn": 6323,
+              "fn": 44
+            }
+          }
+        }
+      }
+    }
+  },
+  "selection_boundary": "Every scenario is synthetic, independently seeded evaluation evidence. The frozen artifact and existing thresholds are scored without retraining, tuning, calibration selection, or promotion.",
+  "real_world_disclosure": "These robustness tests do not establish real-world fraud performance or fairness across real merchant populations."
+}

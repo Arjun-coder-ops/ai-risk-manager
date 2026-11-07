@@ -41,4 +41,6 @@ python evaluation/run_generalization_protocols.py
 Phase 4.3 now supplies the complete decision, review-budget, event, raw
 calibration, cost, and cluster-bootstrap metric contract in
 [`decision-metrics.md`](decision-metrics.md). Phase 4.4 separately tests
-calibration methods.
+calibration methods. Phase 4.5 expands the stress work into the required
+robustness matrix, including label noise and temporal degradation, in
+[`robustness-tests.md`](robustness-tests.md).
