@@ -27,7 +27,7 @@ python evaluation/run_classical_experiments.py
 It writes `evaluation/classical_model_comparison.json`. The runner uses train
 and validation dates only, records library versions and feature schema, and
 does not load or tune against the final test period. Its reported validation
-leader is not a production promotion decision. Phase 4.2–4.6 must still add
+leader is not a production promotion decision. Phase 4.2–4.6 now add
 merchant/OOD/cold-start/stress protocols, decision metrics, calibration,
 robustness checks, and ablations before any model replacement.
 

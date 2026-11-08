@@ -169,6 +169,11 @@ prevalence, and temporal drift. It exposes severe synthetic campaign, OOD, and
 late-drift false-positive failures; see
 [`docs/robustness-tests.md`](docs/robustness-tests.md).
 
+Phase 4.6 provides a common-window feature, calibration, and model-family
+ablation report. It confirms meaningful merchant-relative value but does not
+promote a new model from one synthetic slice; see
+[`docs/ablation-experiments.md`](docs/ablation-experiments.md).
+
 ## Independent synthetic OOD stress test
 
 The held-out result above is synthetic **in-distribution** evidence only. A
@@ -386,6 +391,8 @@ ai-risk-manager/
 │   ├── calibration_reliability.svg # reliability diagram
 │   ├── run_robustness_tests.py   # Phase 4.5 frozen-model stress suite
 │   ├── robustness_tests.json     # robustness evidence and failure modes
+│   ├── run_ablation_experiments.py # Phase 4.6 common-window comparisons
+│   ├── ablation_experiments.json # feature, calibration, and family evidence
 │   └── audit_log.jsonl           # runtime audit trail (generated)
 ├── tests/test_risk_engine.py    # feature leakage, policy, failure-handling tests
 ├── data/                         # generated CSVs (raw + processed)
