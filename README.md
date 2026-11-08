@@ -174,6 +174,11 @@ ablation report. It confirms meaningful merchant-relative value but does not
 promote a new model from one synthetic slice; see
 [`docs/ablation-experiments.md`](docs/ablation-experiments.md).
 
+Phase 5 adds reproducible CPU-only PyTorch MLP, autoencoder, LSTM, and TCN
+experiments. None surpasses the operational tree model on synthetic validation,
+so gradient boosting remains the serving choice; see
+[`docs/deep-learning-experiments.md`](docs/deep-learning-experiments.md).
+
 ## Independent synthetic OOD stress test
 
 The held-out result above is synthetic **in-distribution** evidence only. A
@@ -379,6 +384,7 @@ ai-risk-manager/
 │   ├── train.py                 # model comparison + threshold selection
 │   ├── risk_engine.py           # production scoring + policy + explainability
 │   ├── cost_model.py            # configurable false-positive/negative cost model
+│   ├── deep_learning.py          # offline PyTorch experiment primitives
 │   ├── llm_explainer.py         # optional LLM layer (verified-signals-only)
 │   └── artifacts/               # trained model + metadata (generated)
 ├── evaluation/
@@ -393,6 +399,8 @@ ai-risk-manager/
 │   ├── robustness_tests.json     # robustness evidence and failure modes
 │   ├── run_ablation_experiments.py # Phase 4.6 common-window comparisons
 │   ├── ablation_experiments.json # feature, calibration, and family evidence
+│   ├── run_deep_learning_experiments.py # Phase 5 CPU experiment suite
+│   ├── deep_learning_experiments.json # neural-model comparison evidence
 │   └── audit_log.jsonl           # runtime audit trail (generated)
 ├── tests/test_risk_engine.py    # feature leakage, policy, failure-handling tests
 ├── data/                         # generated CSVs (raw + processed)

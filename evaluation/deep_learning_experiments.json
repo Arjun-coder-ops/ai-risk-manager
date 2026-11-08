@@ -1,0 +1,493 @@
+{
+  "report_kind": "phase-5-deep-learning-experiments",
+  "generated_at": "2026-11-08T04:37:00.355860+00:00",
+  "library_versions": {
+    "torch": "2.14.1+cpu",
+    "torch_cuda_available": false
+  },
+  "feature_schema_version": "merchant-day-eod-v2",
+  "feature_columns": [
+    "txn_volume_zscore",
+    "failed_rate_delta",
+    "amount_zscore",
+    "amount_volatility_ratio",
+    "new_user_ratio_delta",
+    "device_diversity_ratio",
+    "region_spread_zscore",
+    "rolling_volume_trend",
+    "weekday_volume_ratio",
+    "txn_volume_percentile",
+    "ewm_volume_zscore",
+    "recent_volume_volatility_ratio",
+    "txn_acceleration_ratio",
+    "trend_adjusted_volume_zscore",
+    "volume_change_point_score",
+    "device_diversity_delta",
+    "historical_anomaly_rate"
+  ],
+  "configuration": {
+    "seed": 42,
+    "batch_size": 256,
+    "max_epochs": 25,
+    "patience": 4,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "hidden_dim": 48,
+    "dropout": 0.1,
+    "sequence_length": 14
+  },
+  "protocol": {
+    "train_date_range": [
+      "2026-01-08",
+      "2026-04-15"
+    ],
+    "validation_date_range": [
+      "2026-04-16",
+      "2026-05-15"
+    ],
+    "train_rows": 13303,
+    "validation_rows": 4346,
+    "test_split_loaded": false,
+    "normalization": "FeatureNormalizer is fitted only on tabular training rows and then applied unchanged to validation rows and sequences.",
+    "sequence_training_targets": 11353,
+    "sequence_validation_targets": 4346,
+    "sequence_information_boundary": "A sequence ends on its target merchant-day and contains no later feature rows or labels."
+  },
+  "models": {
+    "mlp": {
+      "name": "mlp",
+      "hypothesis": "A compact non-linear tabular model may match classical ranking while remaining operationally simple.",
+      "architecture": "17 normalized end-of-day features -> 48 ReLU -> 24 ReLU -> binary logit.",
+      "parameter_count": 2065,
+      "training": {
+        "best_epoch": 25,
+        "best_validation_loss": 0.27962987,
+        "epochs_ran": 25,
+        "positive_class_weight": 12.369849,
+        "history": [
+          {
+            "epoch": 1,
+            "train_loss": 1.117588,
+            "validation_loss": 0.87574455
+          },
+          {
+            "epoch": 2,
+            "train_loss": 0.71173738,
+            "validation_loss": 0.5490246
+          },
+          {
+            "epoch": 3,
+            "train_loss": 0.48377368,
+            "validation_loss": 0.43583683
+          },
+          {
+            "epoch": 4,
+            "train_loss": 0.40889422,
+            "validation_loss": 0.38899891
+          },
+          {
+            "epoch": 5,
+            "train_loss": 0.36732642,
+            "validation_loss": 0.35848709
+          },
+          {
+            "epoch": 6,
+            "train_loss": 0.34835358,
+            "validation_loss": 0.34385171
+          },
+          {
+            "epoch": 7,
+            "train_loss": 0.33155806,
+            "validation_loss": 0.33574889
+          },
+          {
+            "epoch": 8,
+            "train_loss": 0.31730574,
+            "validation_loss": 0.31597593
+          },
+          {
+            "epoch": 9,
+            "train_loss": 0.3089529,
+            "validation_loss": 0.31517744
+          },
+          {
+            "epoch": 10,
+            "train_loss": 0.2957957,
+            "validation_loss": 0.3037104
+          },
+          {
+            "epoch": 11,
+            "train_loss": 0.28256029,
+            "validation_loss": 0.30004414
+          },
+          {
+            "epoch": 12,
+            "train_loss": 0.28607387,
+            "validation_loss": 0.30406903
+          },
+          {
+            "epoch": 13,
+            "train_loss": 0.2886834,
+            "validation_loss": 0.29359565
+          },
+          {
+            "epoch": 14,
+            "train_loss": 0.27897345,
+            "validation_loss": 0.28890386
+          },
+          {
+            "epoch": 15,
+            "train_loss": 0.27200448,
+            "validation_loss": 0.29149736
+          },
+          {
+            "epoch": 16,
+            "train_loss": 0.27061779,
+            "validation_loss": 0.28905634
+          },
+          {
+            "epoch": 17,
+            "train_loss": 0.26737249,
+            "validation_loss": 0.28559663
+          },
+          {
+            "epoch": 18,
+            "train_loss": 0.25886603,
+            "validation_loss": 0.28503901
+          },
+          {
+            "epoch": 19,
+            "train_loss": 0.25972974,
+            "validation_loss": 0.28432655
+          },
+          {
+            "epoch": 20,
+            "train_loss": 0.25925851,
+            "validation_loss": 0.28203524
+          },
+          {
+            "epoch": 21,
+            "train_loss": 0.25273445,
+            "validation_loss": 0.28169708
+          },
+          {
+            "epoch": 22,
+            "train_loss": 0.25648161,
+            "validation_loss": 0.28265012
+          },
+          {
+            "epoch": 23,
+            "train_loss": 0.25087976,
+            "validation_loss": 0.28205429
+          },
+          {
+            "epoch": 24,
+            "train_loss": 0.24326159,
+            "validation_loss": 0.2827692
+          },
+          {
+            "epoch": 25,
+            "train_loss": 0.24550979,
+            "validation_loss": 0.27962987
+          }
+        ],
+        "checkpoint_state_sha256": "57b487fe79df9fd30e155a6be735e2cf1fa34da5851d5501e7af595630201c14",
+        "checkpoint_filename": "mlp.pt",
+        "checkpoint_retention": "transient_local_execution_artifact; state hash records the loaded best checkpoint"
+      },
+      "validation_ranking": {
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "roc_auc": 0.983889,
+        "pr_auc": 0.873382
+      },
+      "validation_latency_cpu": {
+        "batch_rows": 512,
+        "repeats": 15,
+        "mean_batch_ms": 0.28724,
+        "mean_per_row_ms": 0.000561
+      }
+    },
+    "normal_behavior_autoencoder": {
+      "name": "normal_behavior_autoencoder",
+      "hypothesis": "Reconstruction error after normal-only training can rank unusual merchant-days without fraud labels during fitting.",
+      "architecture": "17 normalized features -> 48 -> 12 latent dimensions -> 48 -> reconstruction.",
+      "parameter_count": 2909,
+      "training": {
+        "best_epoch": 25,
+        "best_validation_loss": 0.03794016,
+        "epochs_ran": 25,
+        "normal_training_rows": 12308,
+        "checkpoint_state_sha256": "4fef18db0f375e7f4273924b9bd3c67efd63fab349e4c66c0a0473b3e803c9c7",
+        "checkpoint_filename": "autoencoder.pt",
+        "checkpoint_retention": "transient_local_execution_artifact; state hash records the loaded best checkpoint"
+      },
+      "validation_ranking": {
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "roc_auc": 0.937041,
+        "pr_auc": 0.686569
+      },
+      "validation_latency_cpu": {
+        "batch_rows": 512,
+        "repeats": 15,
+        "mean_batch_ms": 0.40318,
+        "mean_per_row_ms": 0.000787
+      },
+      "score_semantics": "reconstruction_error_anomaly_score_not_probability"
+    },
+    "lstm": {
+      "name": "lstm",
+      "hypothesis": "A recurrent model may detect developing multi-day merchant patterns missed by a single end-of-day feature row.",
+      "architecture": "14 observed merchant-day feature vectors -> 48-unit LSTM -> binary logit; every target window ends at its prediction day.",
+      "parameter_count": 12913,
+      "training": {
+        "best_epoch": 11,
+        "best_validation_loss": 0.1854381,
+        "epochs_ran": 15,
+        "positive_class_weight": 12.004582,
+        "history": [
+          {
+            "epoch": 1,
+            "train_loss": 1.07208603,
+            "validation_loss": 0.81658424
+          },
+          {
+            "epoch": 2,
+            "train_loss": 0.66646699,
+            "validation_loss": 0.47826352
+          },
+          {
+            "epoch": 3,
+            "train_loss": 0.44153588,
+            "validation_loss": 0.33075436
+          },
+          {
+            "epoch": 4,
+            "train_loss": 0.34382264,
+            "validation_loss": 0.26412915
+          },
+          {
+            "epoch": 5,
+            "train_loss": 0.28846954,
+            "validation_loss": 0.22955969
+          },
+          {
+            "epoch": 6,
+            "train_loss": 0.25239269,
+            "validation_loss": 0.21105129
+          },
+          {
+            "epoch": 7,
+            "train_loss": 0.22906399,
+            "validation_loss": 0.20066873
+          },
+          {
+            "epoch": 8,
+            "train_loss": 0.20766463,
+            "validation_loss": 0.19450123
+          },
+          {
+            "epoch": 9,
+            "train_loss": 0.19536161,
+            "validation_loss": 0.18614874
+          },
+          {
+            "epoch": 10,
+            "train_loss": 0.17768229,
+            "validation_loss": 0.18698224
+          },
+          {
+            "epoch": 11,
+            "train_loss": 0.16613233,
+            "validation_loss": 0.1854381
+          },
+          {
+            "epoch": 12,
+            "train_loss": 0.15347239,
+            "validation_loss": 0.18568897
+          },
+          {
+            "epoch": 13,
+            "train_loss": 0.1446783,
+            "validation_loss": 0.19252038
+          },
+          {
+            "epoch": 14,
+            "train_loss": 0.13736504,
+            "validation_loss": 0.18619948
+          },
+          {
+            "epoch": 15,
+            "train_loss": 0.12837634,
+            "validation_loss": 0.19337316
+          }
+        ],
+        "checkpoint_state_sha256": "08f4447d24e3dd90c4f2d6400c3842f37f48e466d53a1d3c2ea90f97cd5cc15c",
+        "checkpoint_filename": "lstm.pt",
+        "checkpoint_retention": "transient_local_execution_artifact; state hash records the loaded best checkpoint"
+      },
+      "validation_ranking": {
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "roc_auc": 0.992771,
+        "pr_auc": 0.885684
+      },
+      "validation_latency_cpu": {
+        "batch_rows": 512,
+        "repeats": 15,
+        "mean_batch_ms": 23.181267,
+        "mean_per_row_ms": 0.045276
+      }
+    },
+    "tcn": {
+      "name": "tcn",
+      "hypothesis": "A causal convolution may match recurrent temporal detection with fewer sequential operations and lower latency.",
+      "architecture": "14 observed merchant-day feature vectors -> causal 1x1 projection -> dilated residual convolutions (1,2) -> binary logit.",
+      "parameter_count": 14833,
+      "training": {
+        "best_epoch": 13,
+        "best_validation_loss": 0.17245896,
+        "epochs_ran": 17,
+        "positive_class_weight": 12.004582,
+        "history": [
+          {
+            "epoch": 1,
+            "train_loss": 0.7793057,
+            "validation_loss": 0.40395069
+          },
+          {
+            "epoch": 2,
+            "train_loss": 0.35302652,
+            "validation_loss": 0.27539483
+          },
+          {
+            "epoch": 3,
+            "train_loss": 0.29280461,
+            "validation_loss": 0.25093993
+          },
+          {
+            "epoch": 4,
+            "train_loss": 0.2620556,
+            "validation_loss": 0.23150487
+          },
+          {
+            "epoch": 5,
+            "train_loss": 0.23670707,
+            "validation_loss": 0.22000496
+          },
+          {
+            "epoch": 6,
+            "train_loss": 0.21442519,
+            "validation_loss": 0.20878717
+          },
+          {
+            "epoch": 7,
+            "train_loss": 0.19484485,
+            "validation_loss": 0.19661784
+          },
+          {
+            "epoch": 8,
+            "train_loss": 0.18625686,
+            "validation_loss": 0.19107644
+          },
+          {
+            "epoch": 9,
+            "train_loss": 0.1773162,
+            "validation_loss": 0.18176659
+          },
+          {
+            "epoch": 10,
+            "train_loss": 0.15981771,
+            "validation_loss": 0.18578829
+          },
+          {
+            "epoch": 11,
+            "train_loss": 0.15782367,
+            "validation_loss": 0.17740112
+          },
+          {
+            "epoch": 12,
+            "train_loss": 0.14704557,
+            "validation_loss": 0.17280213
+          },
+          {
+            "epoch": 13,
+            "train_loss": 0.14162258,
+            "validation_loss": 0.17245896
+          },
+          {
+            "epoch": 14,
+            "train_loss": 0.12781137,
+            "validation_loss": 0.17751489
+          },
+          {
+            "epoch": 15,
+            "train_loss": 0.12289094,
+            "validation_loss": 0.17909955
+          },
+          {
+            "epoch": 16,
+            "train_loss": 0.1164728,
+            "validation_loss": 0.1753926
+          },
+          {
+            "epoch": 17,
+            "train_loss": 0.11530473,
+            "validation_loss": 0.18295769
+          }
+        ],
+        "checkpoint_state_sha256": "09850142607f03ecd084f847038132cf6dd82dff00ff4ff78ae52f50ff9b0686",
+        "checkpoint_filename": "tcn.pt",
+        "checkpoint_retention": "transient_local_execution_artifact; state hash records the loaded best checkpoint"
+      },
+      "validation_ranking": {
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "roc_auc": 0.993467,
+        "pr_auc": 0.922128
+      },
+      "validation_latency_cpu": {
+        "batch_rows": 512,
+        "repeats": 15,
+        "mean_batch_ms": 9.043393,
+        "mean_per_row_ms": 0.017663
+      }
+    }
+  },
+  "classical_comparators": {
+    "heuristic_baseline": {
+      "score_kind": "heuristic_score",
+      "validation_ranking": {
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "roc_auc": 0.849514,
+        "pr_auc": 0.443319
+      }
+    },
+    "isolation_forest": {
+      "score_kind": "anomaly_score",
+      "validation_ranking": {
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "roc_auc": 0.902535,
+        "pr_auc": 0.469292
+      }
+    },
+    "hist_gradient_boosting": {
+      "score_kind": "probability",
+      "validation_ranking": {
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "roc_auc": 0.989622,
+        "pr_auc": 0.931039
+      }
+    }
+  },
+  "conditional_models": {
+    "transformer": "not_implemented: 180-day synthetic histories and the observed LSTM/TCN comparison do not yet justify additional sequence complexity.",
+    "graph_neural_network": "not_implemented: merchant-day aggregates contain no defensible merchant-device-account graph relationships."
+  },
+  "operational_decision": "The serving HistGradientBoosting model remains operational. These synthetic validation experiments alone do not justify promotion of a neural model, especially given Phase 4 robustness failures.",
+  "selection_boundary": "No deep-learning experiment loaded, scored, or tuned on the declared final temporal test split."
+}
