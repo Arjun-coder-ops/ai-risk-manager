@@ -1,6 +1,6 @@
 {
   "report_kind": "phase-5-deep-learning-experiments",
-  "generated_at": "2026-11-08T04:37:00.355860+00:00",
+  "generated_at": "2026-11-08T05:11:22.385781+00:00",
   "library_versions": {
     "torch": "2.14.1+cpu",
     "torch_cuda_available": false
@@ -204,8 +204,41 @@
       "validation_latency_cpu": {
         "batch_rows": 512,
         "repeats": 15,
-        "mean_batch_ms": 0.28724,
-        "mean_per_row_ms": 0.000561
+        "mean_batch_ms": 0.083467,
+        "mean_per_row_ms": 0.000163
+      },
+      "neural_attribution_example": {
+        "method": "integrated_gradients",
+        "attribution_space": "mlp_logit",
+        "baseline": "zero vector in training-normalized feature space (training feature mean)",
+        "steps": 32,
+        "validation_example_index": 448,
+        "score": 1.0,
+        "top_contributions": [
+          {
+            "feature": "amount_zscore",
+            "attribution_value": 15.8252,
+            "attribution_direction": "increases_model_estimated_risk",
+            "attribution_space": "integrated_gradients_logit"
+          },
+          {
+            "feature": "amount_volatility_ratio",
+            "attribution_value": 9.609,
+            "attribution_direction": "increases_model_estimated_risk",
+            "attribution_space": "integrated_gradients_logit"
+          },
+          {
+            "feature": "historical_anomaly_rate",
+            "attribution_value": -0.7802,
+            "attribution_direction": "decreases_model_estimated_risk",
+            "attribution_space": "integrated_gradients_logit"
+          }
+        ],
+        "provenance": {
+          "feature_schema_version": "merchant-day-eod-v2",
+          "model": "offline_phase5_mlp",
+          "serving_status": "not_serving"
+        }
       }
     },
     "normal_behavior_autoencoder": {
@@ -231,8 +264,8 @@
       "validation_latency_cpu": {
         "batch_rows": 512,
         "repeats": 15,
-        "mean_batch_ms": 0.40318,
-        "mean_per_row_ms": 0.000787
+        "mean_batch_ms": 0.084907,
+        "mean_per_row_ms": 0.000166
       },
       "score_semantics": "reconstruction_error_anomaly_score_not_probability"
     },
@@ -336,8 +369,8 @@
       "validation_latency_cpu": {
         "batch_rows": 512,
         "repeats": 15,
-        "mean_batch_ms": 23.181267,
-        "mean_per_row_ms": 0.045276
+        "mean_batch_ms": 3.660207,
+        "mean_per_row_ms": 0.007149
       }
     },
     "tcn": {
@@ -450,8 +483,8 @@
       "validation_latency_cpu": {
         "batch_rows": 512,
         "repeats": 15,
-        "mean_batch_ms": 9.043393,
-        "mean_per_row_ms": 0.017663
+        "mean_batch_ms": 7.113667,
+        "mean_per_row_ms": 0.013894
       }
     }
   },

@@ -1,0 +1,320 @@
+{
+  "report_kind": "phase-6-three-action-policy-analysis",
+  "generated_at": "2026-11-08T05:10:38.626605+00:00",
+  "model_version": "fraud-spike-v2-eod",
+  "feature_schema_version": "merchant-day-eod-v2",
+  "evaluation_population": {
+    "name": "validation_only",
+    "date_range": [
+      "2026-04-16",
+      "2026-05-15"
+    ],
+    "rows": 4346,
+    "positive_rate": 0.068569,
+    "final_test_loaded": false
+  },
+  "active_policy_artifact": {
+    "policy_version": "three-action-v1",
+    "model_version": "fraud-spike-v2-eod",
+    "review_threshold": 0.1,
+    "high_threshold": 0.67,
+    "review_capacity_per_1000_merchant_days": 50,
+    "risk_tolerance": "prototype_high_recall_review_with_human_confirmation",
+    "actions": {
+      "LOW": {
+        "code": "CONTINUE_MONITORING",
+        "description": "Continue routine monitoring; this is a policy decision, not a verified human outcome."
+      },
+      "REVIEW": {
+        "code": "ANALYST_REVIEW",
+        "description": "Create an analyst-review recommendation before any merchant-facing action."
+      },
+      "HIGH": {
+        "code": "PRIORITY_INVESTIGATION",
+        "description": "Create a priority investigation recommendation; require human confirmation before irreversible merchant action."
+      }
+    },
+    "cost_assumptions": {
+      "analyst_review_cost_inr": 150.0,
+      "reviewed_true_positive_response_cost_inr": 500.0,
+      "reviewed_false_alert_cost_inr": 300.0,
+      "high_escalation_cost_inr": 800.0,
+      "high_true_positive_response_cost_inr": 500.0,
+      "high_false_alert_cost_inr": 1500.0,
+      "missed_fraud_loss_inr": 8000.0,
+      "disclosure": "Illustrative configurable prototype assumptions, not real merchant, analyst, or fraud-loss financial data."
+    }
+  },
+  "candidate_policies": {
+    "three-action-v1": {
+      "configuration": {
+        "policy_version": "three-action-v1",
+        "model_version": "fraud-spike-v2-eod",
+        "review_threshold": 0.1,
+        "high_threshold": 0.67,
+        "review_capacity_per_1000_merchant_days": 50,
+        "risk_tolerance": "prototype_high_recall_review_with_human_confirmation",
+        "actions": {
+          "LOW": {
+            "code": "CONTINUE_MONITORING",
+            "description": "Continue routine monitoring; this is a policy decision, not a verified human outcome."
+          },
+          "REVIEW": {
+            "code": "ANALYST_REVIEW",
+            "description": "Create an analyst-review recommendation before any merchant-facing action."
+          },
+          "HIGH": {
+            "code": "PRIORITY_INVESTIGATION",
+            "description": "Create a priority investigation recommendation; require human confirmation before irreversible merchant action."
+          }
+        },
+        "cost_assumptions": {
+          "analyst_review_cost_inr": 150.0,
+          "reviewed_true_positive_response_cost_inr": 500.0,
+          "reviewed_false_alert_cost_inr": 300.0,
+          "high_escalation_cost_inr": 800.0,
+          "high_true_positive_response_cost_inr": 500.0,
+          "high_false_alert_cost_inr": 1500.0,
+          "missed_fraud_loss_inr": 8000.0,
+          "disclosure": "Illustrative configurable prototype assumptions, not real merchant, analyst, or fraud-loss financial data."
+        }
+      },
+      "offline_evaluation": {
+        "policy_version": "three-action-v1",
+        "model_version": "fraud-spike-v2-eod",
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "action_counts": {
+          "LOW": {
+            "total": 3996,
+            "positive": 21,
+            "negative": 3975
+          },
+          "REVIEW": {
+            "total": 99,
+            "positive": 38,
+            "negative": 61
+          },
+          "HIGH": {
+            "total": 251,
+            "positive": 239,
+            "negative": 12
+          }
+        },
+        "review_capacity": {
+          "configured_per_1000_merchant_days": 50,
+          "capacity_rows": 217,
+          "review_rows": 99,
+          "within_capacity": true
+        },
+        "alert_volume": {
+          "high_rows": 251,
+          "review_or_high_rows": 350
+        },
+        "cost_assumptions": {
+          "analyst_review_cost_inr": 150.0,
+          "reviewed_true_positive_response_cost_inr": 500.0,
+          "reviewed_false_alert_cost_inr": 300.0,
+          "high_escalation_cost_inr": 800.0,
+          "high_true_positive_response_cost_inr": 500.0,
+          "high_false_alert_cost_inr": 1500.0,
+          "missed_fraud_loss_inr": 8000.0,
+          "disclosure": "Illustrative configurable prototype assumptions, not real merchant, analyst, or fraud-loss financial data."
+        },
+        "cost_components_inr": {
+          "analyst_review_cost_inr": 14850.0,
+          "reviewed_true_positive_response_cost_inr": 19000.0,
+          "reviewed_false_alert_cost_inr": 18300.0,
+          "high_escalation_cost_inr": 200800.0,
+          "high_true_positive_response_cost_inr": 119500.0,
+          "high_false_alert_cost_inr": 18000.0,
+          "missed_fraud_loss_inr": 168000.0
+        },
+        "total_estimated_cost_inr": 558450.0,
+        "disclosure": "Offline synthetic-label evaluation under illustrative assumptions. It does not establish real-world financial impact or change the active policy."
+      }
+    },
+    "three-action-candidate-recall-v1": {
+      "configuration": {
+        "policy_version": "three-action-candidate-recall-v1",
+        "model_version": "fraud-spike-v2-eod",
+        "review_threshold": 0.05,
+        "high_threshold": 0.55,
+        "review_capacity_per_1000_merchant_days": 50,
+        "risk_tolerance": "candidate_more_recall_with_higher_review_volume",
+        "actions": {
+          "LOW": {
+            "code": "CONTINUE_MONITORING",
+            "description": "Continue routine monitoring; this is a policy decision, not a verified human outcome."
+          },
+          "REVIEW": {
+            "code": "ANALYST_REVIEW",
+            "description": "Create an analyst-review recommendation before any merchant-facing action."
+          },
+          "HIGH": {
+            "code": "PRIORITY_INVESTIGATION",
+            "description": "Create a priority investigation recommendation; require human confirmation before irreversible merchant action."
+          }
+        },
+        "cost_assumptions": {
+          "analyst_review_cost_inr": 150.0,
+          "reviewed_true_positive_response_cost_inr": 500.0,
+          "reviewed_false_alert_cost_inr": 300.0,
+          "high_escalation_cost_inr": 800.0,
+          "high_true_positive_response_cost_inr": 500.0,
+          "high_false_alert_cost_inr": 1500.0,
+          "missed_fraud_loss_inr": 8000.0,
+          "disclosure": "Illustrative configurable prototype assumptions, not real merchant, analyst, or fraud-loss financial data."
+        }
+      },
+      "offline_evaluation": {
+        "policy_version": "three-action-candidate-recall-v1",
+        "model_version": "fraud-spike-v2-eod",
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "action_counts": {
+          "LOW": {
+            "total": 3923,
+            "positive": 19,
+            "negative": 3904
+          },
+          "REVIEW": {
+            "total": 159,
+            "positive": 30,
+            "negative": 129
+          },
+          "HIGH": {
+            "total": 264,
+            "positive": 249,
+            "negative": 15
+          }
+        },
+        "review_capacity": {
+          "configured_per_1000_merchant_days": 50,
+          "capacity_rows": 217,
+          "review_rows": 159,
+          "within_capacity": true
+        },
+        "alert_volume": {
+          "high_rows": 264,
+          "review_or_high_rows": 423
+        },
+        "cost_assumptions": {
+          "analyst_review_cost_inr": 150.0,
+          "reviewed_true_positive_response_cost_inr": 500.0,
+          "reviewed_false_alert_cost_inr": 300.0,
+          "high_escalation_cost_inr": 800.0,
+          "high_true_positive_response_cost_inr": 500.0,
+          "high_false_alert_cost_inr": 1500.0,
+          "missed_fraud_loss_inr": 8000.0,
+          "disclosure": "Illustrative configurable prototype assumptions, not real merchant, analyst, or fraud-loss financial data."
+        },
+        "cost_components_inr": {
+          "analyst_review_cost_inr": 23850.0,
+          "reviewed_true_positive_response_cost_inr": 15000.0,
+          "reviewed_false_alert_cost_inr": 38700.0,
+          "high_escalation_cost_inr": 211200.0,
+          "high_true_positive_response_cost_inr": 124500.0,
+          "high_false_alert_cost_inr": 22500.0,
+          "missed_fraud_loss_inr": 152000.0
+        },
+        "total_estimated_cost_inr": 587750.0,
+        "disclosure": "Offline synthetic-label evaluation under illustrative assumptions. It does not establish real-world financial impact or change the active policy."
+      }
+    },
+    "three-action-candidate-conservative-v1": {
+      "configuration": {
+        "policy_version": "three-action-candidate-conservative-v1",
+        "model_version": "fraud-spike-v2-eod",
+        "review_threshold": 0.2,
+        "high_threshold": 0.8,
+        "review_capacity_per_1000_merchant_days": 50,
+        "risk_tolerance": "candidate_lower_alert_volume_with_more_missed_risk",
+        "actions": {
+          "LOW": {
+            "code": "CONTINUE_MONITORING",
+            "description": "Continue routine monitoring; this is a policy decision, not a verified human outcome."
+          },
+          "REVIEW": {
+            "code": "ANALYST_REVIEW",
+            "description": "Create an analyst-review recommendation before any merchant-facing action."
+          },
+          "HIGH": {
+            "code": "PRIORITY_INVESTIGATION",
+            "description": "Create a priority investigation recommendation; require human confirmation before irreversible merchant action."
+          }
+        },
+        "cost_assumptions": {
+          "analyst_review_cost_inr": 150.0,
+          "reviewed_true_positive_response_cost_inr": 500.0,
+          "reviewed_false_alert_cost_inr": 300.0,
+          "high_escalation_cost_inr": 800.0,
+          "high_true_positive_response_cost_inr": 500.0,
+          "high_false_alert_cost_inr": 1500.0,
+          "missed_fraud_loss_inr": 8000.0,
+          "disclosure": "Illustrative configurable prototype assumptions, not real merchant, analyst, or fraud-loss financial data."
+        }
+      },
+      "offline_evaluation": {
+        "policy_version": "three-action-candidate-conservative-v1",
+        "model_version": "fraud-spike-v2-eod",
+        "rows": 4346,
+        "positive_rate": 0.068569,
+        "action_counts": {
+          "LOW": {
+            "total": 4033,
+            "positive": 30,
+            "negative": 4003
+          },
+          "REVIEW": {
+            "total": 75,
+            "positive": 39,
+            "negative": 36
+          },
+          "HIGH": {
+            "total": 238,
+            "positive": 229,
+            "negative": 9
+          }
+        },
+        "review_capacity": {
+          "configured_per_1000_merchant_days": 50,
+          "capacity_rows": 217,
+          "review_rows": 75,
+          "within_capacity": true
+        },
+        "alert_volume": {
+          "high_rows": 238,
+          "review_or_high_rows": 313
+        },
+        "cost_assumptions": {
+          "analyst_review_cost_inr": 150.0,
+          "reviewed_true_positive_response_cost_inr": 500.0,
+          "reviewed_false_alert_cost_inr": 300.0,
+          "high_escalation_cost_inr": 800.0,
+          "high_true_positive_response_cost_inr": 500.0,
+          "high_false_alert_cost_inr": 1500.0,
+          "missed_fraud_loss_inr": 8000.0,
+          "disclosure": "Illustrative configurable prototype assumptions, not real merchant, analyst, or fraud-loss financial data."
+        },
+        "cost_components_inr": {
+          "analyst_review_cost_inr": 11250.0,
+          "reviewed_true_positive_response_cost_inr": 19500.0,
+          "reviewed_false_alert_cost_inr": 10800.0,
+          "high_escalation_cost_inr": 190400.0,
+          "high_true_positive_response_cost_inr": 114500.0,
+          "high_false_alert_cost_inr": 13500.0,
+          "missed_fraud_loss_inr": 240000.0
+        },
+        "total_estimated_cost_inr": 599950.0,
+        "disclosure": "Offline synthetic-label evaluation under illustrative assumptions. It does not establish real-world financial impact or change the active policy."
+      }
+    }
+  },
+  "operational_decision": "three-action-v1 remains the active policy because it mirrors the existing validation-selected thresholds. Candidate rows are transparent sensitivity analysis only; no candidate is selected or deployed by this runner.",
+  "separation_of_concerns": {
+    "model_estimated_risk": "The serialized model produces an uncalibrated class-1 score.",
+    "policy_decision": "The versioned policy maps the score to one exclusive LOW, REVIEW, or HIGH action.",
+    "human_investigation_outcome": "Analyst feedback and case resolution are stored separately and never overwrite the model score or policy action."
+  }
+}

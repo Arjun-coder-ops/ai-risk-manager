@@ -1,0 +1,406 @@
+{
+  "report_kind": "phase-6-explainability-evidence",
+  "generated_at": "2026-11-08T11:00:19.022117+00:00",
+  "git_provenance": {
+    "commit": "f10790ee7ee85db952445bb6b17e1bed1ae09afd",
+    "source_paths_clean": true
+  },
+  "model_version": "fraud-spike-v2-eod",
+  "model_type": "gradient_boosting",
+  "model_artifact_sha256": "55c34051e9279713d9fbf1979cac465ff80b30c69a8d7276c6c40062307ccfbf",
+  "feature_schema_version": "merchant-day-eod-v2",
+  "explanation_provenance": {
+    "method": "TreeExplainer",
+    "shap_version": "0.49.1",
+    "attribution_space": "model_raw_margin_log_odds",
+    "sample_selection": "first 1,024 chronological validation rows",
+    "validation_date_range": [
+      "2026-04-16",
+      "2026-05-15"
+    ],
+    "final_test_loaded": false
+  },
+  "global_feature_importance": [
+    {
+      "feature": "historical_anomaly_rate",
+      "mean_absolute_shap": 0.371827,
+      "mean_signed_shap": 0.090422,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "amount_volatility_ratio",
+      "mean_absolute_shap": 0.328086,
+      "mean_signed_shap": -0.003625,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "amount_zscore",
+      "mean_absolute_shap": 0.308832,
+      "mean_signed_shap": -0.024394,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "region_spread_zscore",
+      "mean_absolute_shap": 0.303486,
+      "mean_signed_shap": -0.050441,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "failed_rate_delta",
+      "mean_absolute_shap": 0.2478,
+      "mean_signed_shap": -0.049534,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "txn_volume_percentile",
+      "mean_absolute_shap": 0.218523,
+      "mean_signed_shap": 0.015725,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "weekday_volume_ratio",
+      "mean_absolute_shap": 0.196159,
+      "mean_signed_shap": -0.023952,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "device_diversity_delta",
+      "mean_absolute_shap": 0.124563,
+      "mean_signed_shap": -0.048424,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "new_user_ratio_delta",
+      "mean_absolute_shap": 0.123139,
+      "mean_signed_shap": -0.040192,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "txn_volume_zscore",
+      "mean_absolute_shap": 0.111064,
+      "mean_signed_shap": 0.016158,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "device_diversity_ratio",
+      "mean_absolute_shap": 0.097627,
+      "mean_signed_shap": -0.031314,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "trend_adjusted_volume_zscore",
+      "mean_absolute_shap": 0.0786,
+      "mean_signed_shap": 0.001533,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "recent_volume_volatility_ratio",
+      "mean_absolute_shap": 0.071997,
+      "mean_signed_shap": 0.002812,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "volume_change_point_score",
+      "mean_absolute_shap": 0.069032,
+      "mean_signed_shap": 0.003173,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "ewm_volume_zscore",
+      "mean_absolute_shap": 0.068608,
+      "mean_signed_shap": -0.012124,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "txn_acceleration_ratio",
+      "mean_absolute_shap": 0.044404,
+      "mean_signed_shap": -0.010178,
+      "attribution_space": "model_raw_margin_log_odds"
+    },
+    {
+      "feature": "rolling_volume_trend",
+      "mean_absolute_shap": 0.040997,
+      "mean_signed_shap": 0.011038,
+      "attribution_space": "model_raw_margin_log_odds"
+    }
+  ],
+  "global_feature_importance_plot": "global_feature_importance.svg",
+  "local_explanations": [
+    {
+      "merchant_id": "M0026",
+      "date": "2026-05-03",
+      "risk_score": 0.999759,
+      "signals": [
+        {
+          "feature": "failed_rate_delta",
+          "value": 0.2177,
+          "feature_label": "failed-payment rate",
+          "feature_value": 0.2177,
+          "feature_neutral_reference": 0.0,
+          "observed_value": 0.2809,
+          "baseline_value": 0.0632,
+          "observed_value_direction": "above_historical_baseline",
+          "reference_kind": "strictly_prior_merchant_baseline",
+          "attribution_value": 5.6449,
+          "shap_value": 5.6449,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Strongly increased model-estimated risk",
+          "description": "Observed failed-payment rate is above_historical_baseline; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        },
+        {
+          "feature": "region_spread_zscore",
+          "value": 2.3604,
+          "feature_label": "distinct regions",
+          "feature_value": 2.3604,
+          "feature_neutral_reference": 0.0,
+          "observed_value": 2.0,
+          "baseline_value": 1.1429,
+          "observed_value_direction": "above_historical_baseline",
+          "reference_kind": "strictly_prior_merchant_baseline",
+          "attribution_value": 4.6979,
+          "shap_value": 4.6979,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Strongly increased model-estimated risk",
+          "description": "Observed distinct regions is above_historical_baseline; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        },
+        {
+          "feature": "weekday_volume_ratio",
+          "value": 1.724,
+          "feature_label": "same-weekday volume ratio",
+          "feature_value": 1.724,
+          "feature_neutral_reference": 1.0,
+          "observed_value": 89.0,
+          "baseline_value": null,
+          "observed_value_direction": "above_feature_neutral_reference",
+          "reference_kind": "engineered_feature_neutral_reference",
+          "attribution_value": 1.1085,
+          "shap_value": 1.1085,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Moderately increased model-estimated risk",
+          "description": "Observed same-weekday volume ratio is above_feature_neutral_reference; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        }
+      ]
+    },
+    {
+      "merchant_id": "M0026",
+      "date": "2026-05-01",
+      "risk_score": 0.998876,
+      "signals": [
+        {
+          "feature": "failed_rate_delta",
+          "value": 0.1481,
+          "feature_label": "failed-payment rate",
+          "feature_value": 0.1481,
+          "feature_neutral_reference": 0.0,
+          "observed_value": 0.1869,
+          "baseline_value": 0.0388,
+          "observed_value_direction": "above_historical_baseline",
+          "reference_kind": "strictly_prior_merchant_baseline",
+          "attribution_value": 3.8934,
+          "shap_value": 3.8934,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Strongly increased model-estimated risk",
+          "description": "Observed failed-payment rate is above_historical_baseline; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        },
+        {
+          "feature": "region_spread_zscore",
+          "value": 3.4744,
+          "feature_label": "distinct regions",
+          "feature_value": 3.4744,
+          "feature_neutral_reference": 0.0,
+          "observed_value": 2.0,
+          "baseline_value": 1.0714,
+          "observed_value_direction": "above_historical_baseline",
+          "reference_kind": "strictly_prior_merchant_baseline",
+          "attribution_value": 3.8396,
+          "shap_value": 3.8396,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Strongly increased model-estimated risk",
+          "description": "Observed distinct regions is above_historical_baseline; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        },
+        {
+          "feature": "weekday_volume_ratio",
+          "value": 1.7962,
+          "feature_label": "same-weekday volume ratio",
+          "feature_value": 1.7962,
+          "feature_neutral_reference": 1.0,
+          "observed_value": 107.0,
+          "baseline_value": null,
+          "observed_value_direction": "above_feature_neutral_reference",
+          "reference_kind": "engineered_feature_neutral_reference",
+          "attribution_value": 1.4482,
+          "shap_value": 1.4482,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Moderately increased model-estimated risk",
+          "description": "Observed same-weekday volume ratio is above_feature_neutral_reference; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        }
+      ]
+    },
+    {
+      "merchant_id": "M0017",
+      "date": "2026-05-02",
+      "risk_score": 0.998771,
+      "signals": [
+        {
+          "feature": "device_diversity_ratio",
+          "value": 0.4774,
+          "feature_label": "devices per user",
+          "feature_value": 0.4774,
+          "feature_neutral_reference": 1.0,
+          "observed_value": 0.4774,
+          "baseline_value": 0.7829,
+          "observed_value_direction": "below_historical_baseline",
+          "reference_kind": "strictly_prior_merchant_baseline",
+          "attribution_value": 4.9527,
+          "shap_value": 4.9527,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Strongly increased model-estimated risk",
+          "description": "Observed devices per user is below_historical_baseline; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        },
+        {
+          "feature": "device_diversity_delta",
+          "value": -0.3055,
+          "feature_label": "devices-per-user change",
+          "feature_value": -0.3055,
+          "feature_neutral_reference": 0.0,
+          "observed_value": 0.4774,
+          "baseline_value": 0.7829,
+          "observed_value_direction": "below_historical_baseline",
+          "reference_kind": "strictly_prior_merchant_baseline",
+          "attribution_value": 3.7232,
+          "shap_value": 3.7232,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Strongly increased model-estimated risk",
+          "description": "Observed devices-per-user change is below_historical_baseline; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        },
+        {
+          "feature": "new_user_ratio_delta",
+          "value": 0.1869,
+          "feature_label": "new-user ratio",
+          "feature_value": 0.1869,
+          "feature_neutral_reference": 0.0,
+          "observed_value": 0.481,
+          "baseline_value": 0.2941,
+          "observed_value_direction": "above_historical_baseline",
+          "reference_kind": "strictly_prior_merchant_baseline",
+          "attribution_value": 1.3436,
+          "shap_value": 1.3436,
+          "attribution_direction": "increases_model_estimated_risk",
+          "impact": "Moderately increased model-estimated risk",
+          "description": "Observed new-user ratio is above_historical_baseline; its SHAP attribution increases model estimated risk.",
+          "explanation_provenance": {
+            "schema_version": "explanation-v1",
+            "method": "tree_shap",
+            "attribution_space": "model_raw_margin_log_odds",
+            "model_version": "fraud-spike-v2-eod",
+            "feature_schema_version": "merchant-day-eod-v2",
+            "is_model_attribution": true
+          }
+        }
+      ]
+    }
+  ],
+  "neural_attribution": {
+    "status": "available_offline_only",
+    "method": "integrated_gradients",
+    "example": {
+      "method": "integrated_gradients",
+      "attribution_space": "mlp_logit",
+      "baseline": "zero vector in training-normalized feature space (training feature mean)",
+      "steps": 32,
+      "validation_example_index": 448,
+      "score": 1.0,
+      "top_contributions": [
+        {
+          "feature": "amount_zscore",
+          "attribution_value": 15.8252,
+          "attribution_direction": "increases_model_estimated_risk",
+          "attribution_space": "integrated_gradients_logit"
+        },
+        {
+          "feature": "amount_volatility_ratio",
+          "attribution_value": 9.609,
+          "attribution_direction": "increases_model_estimated_risk",
+          "attribution_space": "integrated_gradients_logit"
+        },
+        {
+          "feature": "historical_anomaly_rate",
+          "attribution_value": -0.7802,
+          "attribution_direction": "decreases_model_estimated_risk",
+          "attribution_space": "integrated_gradients_logit"
+        }
+      ],
+      "provenance": {
+        "feature_schema_version": "merchant-day-eod-v2",
+        "model": "offline_phase5_mlp",
+        "serving_status": "not_serving"
+      }
+    }
+  },
+  "interpretation_guardrail": "observed_value_direction describes the feature observation against its prior baseline or neutral reference; attribution_direction independently describes whether the model attribution increased or decreased estimated risk.",
+  "operational_boundary": "Tree SHAP is attached only to the compatible serving tree model. Integrated gradients is retained as offline evidence for the non-serving Phase 5 MLP; it cannot alter a score, policy decision, or human case outcome."
+}

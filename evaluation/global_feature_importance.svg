@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="450" role="img" aria-label="Global mean absolute SHAP feature importance">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="24" y="30" font-family="Arial, sans-serif" font-size="18" fill="#18212f">Global feature importance — mean absolute SHAP (validation sample)</text>
+<text x="298" y="79" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">historical_anomaly_rate</text>
+<rect x="310" y="65" width="510.00" height="18" fill="#287a65"/>
+<text x="828.00" y="79" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.3718</text>
+<text x="298" y="113" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">amount_volatility_ratio</text>
+<rect x="310" y="99" width="450.00" height="18" fill="#287a65"/>
+<text x="768.00" y="113" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.3281</text>
+<text x="298" y="147" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">amount_zscore</text>
+<rect x="310" y="133" width="423.60" height="18" fill="#287a65"/>
+<text x="741.60" y="147" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.3088</text>
+<text x="298" y="181" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">region_spread_zscore</text>
+<rect x="310" y="167" width="416.26" height="18" fill="#287a65"/>
+<text x="734.26" y="181" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.3035</text>
+<text x="298" y="215" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">failed_rate_delta</text>
+<rect x="310" y="201" width="339.88" height="18" fill="#287a65"/>
+<text x="657.88" y="215" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.2478</text>
+<text x="298" y="249" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">txn_volume_percentile</text>
+<rect x="310" y="235" width="299.73" height="18" fill="#287a65"/>
+<text x="617.73" y="249" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.2185</text>
+<text x="298" y="283" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">weekday_volume_ratio</text>
+<rect x="310" y="269" width="269.05" height="18" fill="#287a65"/>
+<text x="587.05" y="283" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.1962</text>
+<text x="298" y="317" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">device_diversity_delta</text>
+<rect x="310" y="303" width="170.85" height="18" fill="#287a65"/>
+<text x="488.85" y="317" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.1246</text>
+<text x="298" y="351" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">new_user_ratio_delta</text>
+<rect x="310" y="337" width="168.90" height="18" fill="#287a65"/>
+<text x="486.90" y="351" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.1231</text>
+<text x="298" y="385" text-anchor="end" font-family="Arial, sans-serif" font-size="13" fill="#263445">txn_volume_zscore</text>
+<rect x="310" y="371" width="152.34" height="18" fill="#287a65"/>
+<text x="470.34" y="385" font-family="Arial, sans-serif" font-size="12" fill="#263445">0.1111</text>
+</svg>
