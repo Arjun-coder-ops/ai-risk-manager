@@ -1,0 +1,31 @@
+{
+  "policy_version": "three-action-v1",
+  "model_version": "fraud-spike-v2-eod",
+  "review_threshold": 0.1,
+  "high_threshold": 0.67,
+  "review_capacity_per_1000_merchant_days": 50,
+  "risk_tolerance": "prototype_high_recall_review_with_human_confirmation",
+  "actions": {
+    "LOW": {
+      "code": "CONTINUE_MONITORING",
+      "description": "Continue routine monitoring; this is a policy decision, not a verified human outcome."
+    },
+    "REVIEW": {
+      "code": "ANALYST_REVIEW",
+      "description": "Create an analyst-review recommendation before any merchant-facing action."
+    },
+    "HIGH": {
+      "code": "PRIORITY_INVESTIGATION",
+      "description": "Create a priority investigation recommendation; require human confirmation before irreversible merchant action."
+    }
+  },
+  "cost_assumptions": {
+    "analyst_review_cost_inr": 150.0,
+    "reviewed_true_positive_response_cost_inr": 500.0,
+    "reviewed_false_alert_cost_inr": 300.0,
+    "high_escalation_cost_inr": 800.0,
+    "high_true_positive_response_cost_inr": 500.0,
+    "high_false_alert_cost_inr": 1500.0,
+    "missed_fraud_loss_inr": 8000.0
+  }
+}

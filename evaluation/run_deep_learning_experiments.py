@@ -37,6 +37,7 @@ from deep_learning import (  # noqa: E402
     train_autoencoder,
     train_classifier,
 )
+from explanations import neural_integrated_gradients, top_neural_attributions  # noqa: E402
 from experiments import fit_and_score, get_classical_candidates  # noqa: E402
 from features import FEATURE_COLUMNS, FEATURE_SCHEMA_VERSION  # noqa: E402
 from split import time_split  # noqa: E402
@@ -144,6 +145,32 @@ def run(output_path: str = DEFAULT_OUTPUT) -> dict[str, Any]:
         "A compact non-linear tabular model may match classical ranking while remaining operationally simple.",
         "17 normalized end-of-day features -> 48 ReLU -> 24 ReLU -> binary logit.",
     )
+    # The MLP is an offline experiment, but its attribution must be just as
+    # explicit as tree explanations.  Integrated gradients is measured from
+    # the zero vector in train-normalized feature space (the training mean),
+    # and its sign describes the MLP logit, not an observed raw-value change.
+    mlp_validation_scores = classifier_scores(mlp, normalized_validation)
+    mlp_example_index = int(np.argmax(mlp_validation_scores))
+    mlp_attributions = neural_integrated_gradients(
+        mlp,
+        normalized_validation[mlp_example_index:mlp_example_index + 1],
+        baseline=np.zeros_like(normalized_validation[mlp_example_index:mlp_example_index + 1]),
+        steps=32,
+    )[0]
+    mlp_report["neural_attribution_example"] = {
+        "method": "integrated_gradients",
+        "attribution_space": "mlp_logit",
+        "baseline": "zero vector in training-normalized feature space (training feature mean)",
+        "steps": 32,
+        "validation_example_index": mlp_example_index,
+        "score": round(float(mlp_validation_scores[mlp_example_index]), 6),
+        "top_contributions": top_neural_attributions(mlp_attributions, FEATURE_COLUMNS),
+        "provenance": {
+            "feature_schema_version": FEATURE_SCHEMA_VERSION,
+            "model": "offline_phase5_mlp",
+            "serving_status": "not_serving",
+        },
+    }
 
     normal_train = normalized_train[train_labels == 0]
     normal_validation = normalized_validation[validation_labels == 0]

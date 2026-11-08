@@ -134,6 +134,7 @@ class DeterministicRiskEngine:
     """Keep tenant API tests independent from serialized model artifacts."""
 
     model_version = "test-model-v1"
+    policy_version = "test-three-action-policy-v1"
 
     def score_merchant_day(self, history, target_date, merchant_id):
         assert len(history) >= 1
@@ -146,6 +147,12 @@ class DeterministicRiskEngine:
             signals=[{"feature": "txn_volume_zscore", "impact": "Strongly increased risk"}],
             recommended_action="Open an investigation.",
             model_version=self.model_version,
+            policy_version=self.policy_version,
+            policy_decision={
+                "risk_level": "HIGH",
+                "action_code": "PRIORITY_INVESTIGATION",
+                "policy_version": self.policy_version,
+            },
             reason=None,
         )
 
@@ -538,6 +545,9 @@ class TestTenantRiskAssessmentAndCases:
         token, assessment = self._create_case(client, monkeypatch, "score")
         assert assessment["risk_level"] == "HIGH"
         assert assessment["risk_score"] == 0.91
+        assert assessment["model_version"] == "test-model-v1"
+        assert assessment["policy_version"] == "test-three-action-policy-v1"
+        assert assessment["policy_decision"]["action_code"] == "PRIORITY_INVESTIGATION"
         assert assessment["case_id"]
         assert assessment["evidence"][0]["feature"] == "txn_volume_zscore"
 

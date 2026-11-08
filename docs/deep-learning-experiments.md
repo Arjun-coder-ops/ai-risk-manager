@@ -25,10 +25,10 @@ All values below are synthetic validation evidence from 2026-04-16 through
 
 | Model | Hypothesis / input | Parameters | PR-AUC | CPU mean ms/row |
 |---|---|---:|---:|---:|
-| MLP | 17 normalized end-of-day features | 2,065 | 0.873382 | 0.000608 |
-| Normal-only autoencoder | Reconstruct normal tabular behaviour; rank by error | 2,909 | 0.686569 | 0.001016 |
-| LSTM | 14 observed merchant-day feature vectors | 12,913 | 0.885684 | 0.045033 |
-| TCN | Same 14-step input, causal dilated convolutions | 14,833 | 0.922128 | 0.095081 |
+| MLP | 17 normalized end-of-day features | 2,065 | 0.873382 | 0.000163 |
+| Normal-only autoencoder | Reconstruct normal tabular behaviour; rank by error | 2,909 | 0.686569 | 0.000166 |
+| LSTM | 14 observed merchant-day feature vectors | 12,913 | 0.885684 | 0.007149 |
+| TCN | Same 14-step input, causal dilated convolutions | 14,833 | 0.922128 | 0.013894 |
 | HistGradientBoosting | Classical supervised tabular comparator | — | **0.931039** | Not benchmarked in this neural report |
 
 The TCN is closer to the supervised tree baseline than the other neural
@@ -40,6 +40,9 @@ remains `fraud-spike-v2-eod` gradient boosting.
 
 - **MLP:** a compact non-linear tabular baseline. It trains to epoch 25 but
   remains below gradient boosting, so it is retained as experiment code only.
+  Its Phase 6 evidence includes Integrated Gradients from a stated
+  train-normalized zero baseline; attribution signs describe its logit, not
+  an observed raw-feature direction.
 - **Autoencoder:** trained exclusively on label-negative training rows. Its
   reconstruction error is an anomaly ranking, **not** a fraud probability;
   it is compared with Isolation Forest (PR-AUC 0.469292), a transparent

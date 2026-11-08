@@ -18,7 +18,7 @@ nothing like a spike for a large one.
 
 A merchant-relative fraud-spike detector. For each merchant-day, the system
 compares that day's behaviour to the merchant's own trailing 14-day
-baseline, scores the probability that the day is part of a fraud spike, and
+baseline, produces an uncalibrated class-1 model score for a fraud-spike label, and
 routes the result into one of three actions (LOW / REVIEW / HIGH) using a
 cost-aware policy, with the top contributing signals surfaced as
 merchant-facing evidence.
@@ -117,7 +117,7 @@ after training and validation, touched exactly once.
 | ROC-AUC | **0.9903** |
 | PR-AUC (appropriate for 7.32% positive rate) | **0.9500** |
 
-**HIGH tier** (score ≥ 0.67, direct merchant alert, validation-tuned for precision ≥ 0.95):
+**HIGH tier** (score ≥ 0.67, validation-tuned for precision ≥ 0.95; the current policy creates a priority investigation recommendation and requires human confirmation before irreversible merchant action):
 
 | | |
 |---|---|
@@ -179,6 +179,11 @@ experiments. None surpasses the operational tree model on synthetic validation,
 so gradient boosting remains the serving choice; see
 [`docs/deep-learning-experiments.md`](docs/deep-learning-experiments.md).
 
+Phase 6 adds versioned three-action policy evidence, persisted decision traces,
+global/local tree-SHAP evidence, and offline MLP Integrated Gradients. It
+separates an observed feature change from its attribution to model-estimated
+risk; see [`docs/explainability-and-policy.md`](docs/explainability-and-policy.md).
+
 ## Independent synthetic OOD stress test
 
 The held-out result above is synthetic **in-distribution** evidence only. A
@@ -218,8 +223,9 @@ REVIEW tier is validation-tuned to minimize *total* cost, which pushes it
 toward higher recall even at the expense of precision — acceptable because
 a human reviews before any merchant-facing action is taken. The HIGH tier
 is deliberately held to a stricter, precision-first bar (≥0.95 on
-validation) because it triggers a direct merchant alert with no human in
-the loop first.
+validation). The versioned Phase 6 policy turns HIGH into a priority
+investigation recommendation; it does not authorize irreversible merchant
+action without human confirmation.
 
 ## Threshold Selection
 
@@ -358,12 +364,13 @@ strict request contract, state model, and operational limits.
   production-hardened (no authentication, RBAC, or tenant isolation).
 - SHAP is used when the installed model/explainer combination supports it;
   the engine uses a transparent heuristic fallback if it does not. SHAP
-  impact direction is distinct from the observed feature-value direction.
+  impact direction is distinct from the observed feature-value direction;
+  see [`docs/explainability-and-policy.md`](docs/explainability-and-policy.md).
 
 ## Future Improvements
 
-- Add transaction-level (not just daily-aggregate) features and a proper
-  SHAP-based attribution layer.
+- Validate policy cost, review-capacity, and risk-tolerance assumptions with
+  governed real operating data before any operational policy change.
 - Calibrate cost assumptions against real (anonymized) chargeback/review
   cost data if given access.
 - Add authentication and per-merchant data scoping to the API.
@@ -384,6 +391,8 @@ ai-risk-manager/
 │   ├── train.py                 # model comparison + threshold selection
 │   ├── risk_engine.py           # production scoring + policy + explainability
 │   ├── cost_model.py            # configurable false-positive/negative cost model
+│   ├── policy.py                # versioned three-action decision policy
+│   ├── explanations.py          # tree/neural attribution contracts
 │   ├── deep_learning.py          # offline PyTorch experiment primitives
 │   ├── llm_explainer.py         # optional LLM layer (verified-signals-only)
 │   └── artifacts/               # trained model + metadata (generated)
@@ -401,6 +410,11 @@ ai-risk-manager/
 │   ├── ablation_experiments.json # feature, calibration, and family evidence
 │   ├── run_deep_learning_experiments.py # Phase 5 CPU experiment suite
 │   ├── deep_learning_experiments.json # neural-model comparison evidence
+│   ├── run_explainability_report.py # Phase 6 local/global attribution report
+│   ├── explainability_report.json # feature attribution provenance/evidence
+│   ├── global_feature_importance.svg # measured SHAP contribution plot
+│   ├── run_policy_analysis.py   # Phase 6 validation-only policy sensitivity
+│   ├── policy_analysis.json     # transparent three-action policy evidence
 │   └── audit_log.jsonl           # runtime audit trail (generated)
 ├── tests/test_risk_engine.py    # feature leakage, policy, failure-handling tests
 ├── data/                         # generated CSVs (raw + processed)

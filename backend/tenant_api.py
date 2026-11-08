@@ -235,6 +235,7 @@ def serialize_assessment(
         "model_version": assessment.model_version,
         "policy_version": assessment.policy_version,
         "evidence": assessment.evidence,
+        "policy_decision": assessment.policy_decision,
         "case_id": case.id if case is not None else None,
         "idempotent_replay": replayed,
         "created_at": assessment.created_at.isoformat(),
@@ -1034,7 +1035,9 @@ def create_risk_assessment():
         return api_error("Risk scoring could not be completed.", 503)
 
     model_version = str(getattr(result, "model_version", None) or getattr(engine, "model_version", "unknown"))
-    policy_version = os.environ.get("RISK_POLICY_VERSION", "policy-v1")
+    # The engine owns the frozen policy artifact.  Do not reconstruct a policy
+    # version from an environment variable after the score was produced.
+    policy_version = str(getattr(result, "policy_version", None) or "unknown-policy")
     existing = session.scalar(select(RiskAssessment).where(
         RiskAssessment.organization_id == g.principal.organization_id,
         RiskAssessment.merchant_day_observation_id == observation.id,
@@ -1059,6 +1062,7 @@ def create_risk_assessment():
         risk_level=getattr(result, "risk_level", None),
         status=status,
         evidence=list(getattr(result, "signals", []) or []),
+        policy_decision=dict(getattr(result, "policy_decision", None) or {}),
     )
     session.add(assessment)
     session.flush()

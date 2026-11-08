@@ -32,6 +32,13 @@ import pandas as pd
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from features import FEATURE_COLUMNS, FEATURE_SCHEMA_VERSION, build_features, MIN_HISTORY_DAYS
+from explanations import (
+    EXPLANATION_SCHEMA_VERSION,
+    heuristic_deviation_signal,
+    normalize_tree_shap_values,
+    tree_attribution_signal,
+)
+from policy import PolicyDecision, PolicyValidationError, load_policy
 from validation import (
     ObservationValidationError,
     normalize_date,
@@ -41,29 +48,7 @@ from validation import (
 
 MODEL_PATH = os.path.join(REPO_ROOT, "model/artifacts/model.joblib")
 META_PATH = os.path.join(REPO_ROOT, "model/artifacts/model_meta.json")
-
-# Human-readable, non-technical descriptions of what each feature means,
-# used to turn a raw feature contribution into merchant-facing evidence.
-FEATURE_EXPLANATIONS = {
-    "txn_volume_zscore": "Transaction volume today is unusually {direction} compared to this merchant's normal daily pattern.",
-    "failed_rate_delta": "The share of failed/declined payments today is unusually {direction} compared to normal.",
-    "amount_zscore": "The average transaction amount today is unusually {direction} compared to this merchant's normal ticket size.",
-    "amount_volatility_ratio": "The spread of transaction amounts today is unusually {direction} compared to normal.",
-    "new_user_ratio_delta": "The share of transactions from new/first-time users today is unusually {direction} compared to normal.",
-    "device_diversity_ratio": "The ratio of devices to users today is unusually {direction} compared to normal.",
-    "region_spread_zscore": "The number of distinct regions transacting today is unusually {direction} compared to this merchant's usual geographic footprint.",
-    "rolling_volume_trend": "Recent 3-day transaction momentum is unusually {direction} compared to the 14-day trend.",
-    "weekday_volume_ratio": "Transaction volume is unusually {direction} for this merchant's matching weekday pattern.",
-    "txn_volume_percentile": "Today's transaction volume sits unusually {direction} in this merchant's recent volume distribution.",
-    "ewm_volume_zscore": "Transaction volume is unusually {direction} relative to the merchant's exponentially weighted recent baseline.",
-    "recent_volume_volatility_ratio": "Recent transaction-volume variability is unusually {direction} compared with the longer baseline.",
-    "txn_acceleration_ratio": "Transaction volume accelerated unusually {direction} versus the immediately preceding days.",
-    "trend_adjusted_volume_zscore": "Transaction volume is unusually {direction} even after accounting for the recent trend.",
-    "volume_change_point_score": "The merchant's prior transaction-volume pattern shows an unusually strong regime shift.",
-    "device_diversity_delta": "Today's devices-per-user mix is unusually {direction} compared with this merchant's recent pattern.",
-    "historical_anomaly_rate": "This merchant has an unusually {direction} recent frequency of raw behavioural anomalies.",
-}
-
+POLICY_PATH = os.path.join(REPO_ROOT, "model/artifacts/policy.json")
 
 class RiskEngineError(Exception):
     pass
@@ -79,6 +64,8 @@ class RiskResult:
     signals: list = field(default_factory=list)
     recommended_action: Optional[str] = None
     model_version: Optional[str] = None
+    policy_version: Optional[str] = None
+    policy_decision: Optional[dict] = None
     reason: Optional[str] = None
 
     def to_dict(self):
@@ -86,7 +73,7 @@ class RiskResult:
 
 
 class RiskEngine:
-    def __init__(self, model_path=MODEL_PATH, meta_path=META_PATH):
+    def __init__(self, model_path=MODEL_PATH, meta_path=META_PATH, policy_path=POLICY_PATH):
         try:
             self.model = joblib.load(model_path)
             with open(meta_path) as f:
@@ -98,6 +85,23 @@ class RiskEngine:
         self.review_threshold = self.meta["review_threshold"]
         self.high_threshold = self.meta["high_threshold"]
         self.model_version = self.meta["model_version"]
+        try:
+            self.policy = load_policy(policy_path)
+        except PolicyValidationError as exc:
+            raise RiskEngineError(f"Risk policy could not be loaded: {exc}") from exc
+        if self.policy.model_version != self.model_version:
+            raise RiskEngineError(
+                "Risk policy model version does not match the loaded model artifact. "
+                "Publish a compatible policy artifact before scoring."
+            )
+        if (
+            not np.isclose(self.policy.review_threshold, self.review_threshold)
+            or not np.isclose(self.policy.high_threshold, self.high_threshold)
+        ):
+            raise RiskEngineError(
+                "Risk policy thresholds do not match the model artifact metadata. "
+                "Regenerate or explicitly version compatible artifacts."
+            )
         if self.meta.get("feature_schema_version") != FEATURE_SCHEMA_VERSION:
             raise RiskEngineError(
                 "Model feature schema does not match the runtime feature contract. "
@@ -164,17 +168,7 @@ class RiskEngine:
 
         target_features = target_features.iloc[0]
         if not bool(target_features["has_sufficient_history"]):
-            return RiskResult(
-                status="insufficient_evidence",
-                merchant_id=merchant_id,
-                date=str(target_date),
-                reason=(
-                    f"Insufficient trailing history for a reliable baseline "
-                    f"(need >= {MIN_HISTORY_DAYS} prior days). "
-                    f"Manual review recommended until more history accumulates."
-                ),
-                recommended_action="MANUAL_REVIEW_INSUFFICIENT_DATA",
-            )
+            return self._insufficient_evidence_result(merchant_id, target_date)
 
         X = target_features[FEATURE_COLUMNS].to_frame().T.astype(float)
         try:
@@ -183,15 +177,17 @@ class RiskEngine:
             return RiskResult(status="error", merchant_id=merchant_id, date=str(target_date),
                                reason=f"Model inference failed: {e}")
 
-        risk_level, action = self._apply_policy(risk_score)
+        policy_decision = self._apply_policy(risk_score)
 
         # Compute SHAP for this single row if the explainer is available.
-        # shap_values(X) → shape (1, 8); take row 0 (the only sample) to get a 1-D (8,) array.
+        # Normalize supported SHAP return conventions to one (1, n_features) row.
         shap_row = None
         if self.explainer is not None:
             try:
-                shap_matrix = self.explainer.shap_values(X)  # (1, 8)
-                shap_row = shap_matrix[0]  # 1-D (8,) — SHAP for this sample
+                shap_matrix = self.explainer.shap_values(X)
+                shap_row = normalize_tree_shap_values(
+                    shap_matrix, expected_rows=1, expected_features=len(FEATURE_COLUMNS)
+                )[0]
             except Exception:
                 pass  # fall back to heuristic silently
 
@@ -202,19 +198,40 @@ class RiskEngine:
             merchant_id=merchant_id,
             date=str(target_date),
             risk_score=round(risk_score, 4),
-            risk_level=risk_level,
+            risk_level=policy_decision.risk_level,
             signals=signals,
-            recommended_action=action,
+            recommended_action=policy_decision.action_description,
             model_version=self.model_version,
+            policy_version=policy_decision.policy_version,
+            policy_decision=policy_decision.to_dict(),
         )
 
-    def _apply_policy(self, risk_score: float):
-        if risk_score >= self.high_threshold:
-            return "HIGH", "Alert merchant and recommend immediate investigation."
-        elif risk_score >= self.review_threshold:
-            return "REVIEW", "Flag for analyst review; do not auto-alert merchant yet."
-        else:
-            return "LOW", "Allow / continue routine monitoring."
+    def _apply_policy(self, risk_score: float) -> PolicyDecision:
+        """Map a model estimate to a versioned business decision only."""
+        return self.policy.decide(risk_score)
+
+    def _insufficient_evidence_result(self, merchant_id: str, target_date: str) -> RiskResult:
+        """Do not make a numeric risk-policy claim when history is insufficient."""
+        action_code = "MANUAL_REVIEW_INSUFFICIENT_DATA"
+        return RiskResult(
+            status="insufficient_evidence",
+            merchant_id=merchant_id,
+            date=str(target_date),
+            reason=(
+                f"Insufficient trailing history for a reliable baseline "
+                f"(need >= {MIN_HISTORY_DAYS} prior days). "
+                f"Manual review recommended until more history accumulates."
+            ),
+            recommended_action=action_code,
+            policy_version=self.policy.policy_version,
+            policy_decision={
+                "risk_level": None,
+                "action_code": action_code,
+                "action_description": "Manual review recommendation due to insufficient evidence, not a model risk tier.",
+                "policy_version": self.policy.policy_version,
+                "threshold_band": "insufficient_evidence",
+            },
+        )
 
     def _explain(self, feature_row: pd.Series, top_k: int = 3) -> list:
         """
@@ -236,38 +253,26 @@ class RiskEngine:
         for col, val, magnitude in contributions[:top_k]:
             if magnitude < 0.15:
                 continue  # not meaningfully deviated, don't manufacture a reason
-            direction = "higher" if val > (1.0 if col in ("amount_volatility_ratio", "rolling_volume_trend") else 0) else "lower"
-            template = FEATURE_EXPLANATIONS.get(col, "{col} deviated from baseline.")
-            signals.append({
-                "feature": col,
-                "value": round(val, 3),
-                "description": template.format(direction=direction),
-            })
+            signals.append(heuristic_deviation_signal(
+                col,
+                feature_row,
+                model_version=self.model_version,
+                feature_schema_version=FEATURE_SCHEMA_VERSION,
+            ))
         if not signals:
             signals.append({
                 "feature": None, "value": None,
                 "description": "No individual signal deviated sharply; risk score reflects a combination of smaller shifts.",
+                "explanation_provenance": {
+                    "schema_version": EXPLANATION_SCHEMA_VERSION,
+                    "method": "heuristic_deviation_fallback",
+                    "attribution_space": None,
+                    "model_version": self.model_version,
+                    "feature_schema_version": FEATURE_SCHEMA_VERSION,
+                    "is_model_attribution": False,
+                },
             })
         return signals
-
-    @staticmethod
-    def _impact_label(shap_val: float) -> str:
-        """Map a SHAP log-odds value to a human-readable risk impact label."""
-        mag = abs(shap_val)
-        if shap_val > 0:
-            if mag > 2.0:
-                return "Strongly increased risk"
-            elif mag > 0.5:
-                return "Increased risk"
-            else:
-                return "Slightly increased risk"
-        else:
-            if mag > 2.0:
-                return "Strongly reduced risk"
-            elif mag > 0.5:
-                return "Reduced risk"
-            else:
-                return "Slightly reduced risk"
 
     def _explain_shap(self, feature_row: pd.Series, shap_row: np.ndarray, top_k: int = 3) -> list:
         """
@@ -297,15 +302,13 @@ class RiskEngine:
             if abs(shap_val) <= 0.1:
                 # Below noise threshold — skip to avoid manufacturing reasons
                 continue
-            direction = "higher" if shap_val > 0 else "lower"
-            template = FEATURE_EXPLANATIONS.get(col, "{col} deviated from baseline.")
-            signals.append({
-                "feature": col,
-                "value": round(val, 3),
-                "shap_value": round(shap_val, 4),
-                "impact": self._impact_label(shap_val),
-                "description": template.format(direction=direction),
-            })
+            signals.append(tree_attribution_signal(
+                col,
+                feature_row,
+                shap_val,
+                model_version=self.model_version,
+                feature_schema_version=FEATURE_SCHEMA_VERSION,
+            ))
 
         if not signals:
             signals.append({
@@ -314,6 +317,14 @@ class RiskEngine:
                 "shap_value": None,
                 "impact": None,
                 "description": "No individual signal deviated sharply; risk score reflects a combination of smaller shifts.",
+                "explanation_provenance": {
+                    "schema_version": EXPLANATION_SCHEMA_VERSION,
+                    "method": "tree_shap",
+                    "attribution_space": "model_raw_margin_log_odds",
+                    "model_version": self.model_version,
+                    "feature_schema_version": FEATURE_SCHEMA_VERSION,
+                    "is_model_attribution": True,
+                },
             })
         return signals
 
@@ -399,17 +410,7 @@ class RiskEngine:
             feat_row = keyed_features.loc[key].to_dict()
                 
             if not bool(feat_row["has_sufficient_history"]):
-                results.append(RiskResult(
-                    status="insufficient_evidence",
-                    merchant_id=merchant_id,
-                    date=str(target_date),
-                    reason=(
-                        f"Insufficient trailing history for a reliable baseline "
-                        f"(need >= {MIN_HISTORY_DAYS} prior days). "
-                        f"Manual review recommended until more history accumulates."
-                    ),
-                    recommended_action="MANUAL_REVIEW_INSUFFICIENT_DATA",
-                ))
+                results.append(self._insufficient_evidence_result(merchant_id, target_date))
                 continue
                 
             valid_items.append((merchant_id, feat_row))
@@ -432,13 +433,17 @@ class RiskEngine:
             shap_matrix = None
             if self.explainer is not None:
                 try:
-                    shap_matrix = self.explainer.shap_values(X)  # (n_valid, 8)
+                    shap_matrix = normalize_tree_shap_values(
+                        self.explainer.shap_values(X),
+                        expected_rows=len(X),
+                        expected_features=len(FEATURE_COLUMNS),
+                    )
                 except Exception:
                     shap_matrix = None  # fall back to heuristic per merchant
 
             for idx, (merchant_id, feat_row) in enumerate(valid_items):
                 risk_score = float(risk_scores[idx])
-                risk_level, action = self._apply_policy(risk_score)
+                policy_decision = self._apply_policy(risk_score)
                 row_series = pd.Series(feat_row)
 
                 # Index into pre-computed batch SHAP — row idx belongs to this merchant.
@@ -450,10 +455,12 @@ class RiskEngine:
                     merchant_id=merchant_id,
                     date=str(target_date),
                     risk_score=round(risk_score, 4),
-                    risk_level=risk_level,
+                    risk_level=policy_decision.risk_level,
                     signals=signals,
-                    recommended_action=action,
+                    recommended_action=policy_decision.action_description,
                     model_version=self.model_version,
+                    policy_version=policy_decision.policy_version,
+                    policy_decision=policy_decision.to_dict(),
                 ))
 
         def sort_key(r):

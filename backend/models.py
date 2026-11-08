@@ -204,6 +204,10 @@ class RiskAssessment(Base):
     risk_level: Mapped[str | None] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     evidence: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    # The score, decision policy, and later analyst outcome are intentionally
+    # separate records.  This preserves the exact action recommendation that
+    # accompanied a versioned model score without rewriting evidence later.
+    policy_decision: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
