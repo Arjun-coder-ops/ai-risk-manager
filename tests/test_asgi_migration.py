@@ -8,8 +8,8 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from backend.asgi import app
-from backend.schemas import ErrorResponse, ReadinessChecks, ReadinessResponse
+from backend.asgi import app, legacy_app_module
+from backend.schemas import ErrorResponse, HealthResponse, ReadinessChecks, ReadinessResponse
 
 
 def asgi_get(path: str) -> httpx.Response:
@@ -32,9 +32,35 @@ def test_fastapi_gateway_serves_swagger_for_the_existing_tenant_contract():
 
 
 def test_fastapi_gateway_preserves_flask_liveness_route():
-    response = asgi_get("/health")
+    async def request() -> httpx.Response:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.get("/health", headers={"X-Request-ID": "native-asgi-12345678"})
+
+    response = asyncio.run(request())
     assert response.status_code in {200, 503}
-    assert response.json()["status"] in {"ok", "degraded"}
+    health = HealthResponse.model_validate(response.json())
+    assert health.status in {"ok", "degraded"}
+    if health.status == "degraded":
+        assert "model_version" not in response.json()
+    assert response.headers["X-Request-ID"] == "native-asgi-12345678"
+
+
+def test_native_fastapi_readiness_uses_the_strict_response_contract():
+    response = asgi_get("/ready")
+    assert response.status_code in {200, 503}
+    validated = ReadinessResponse.model_validate(response.json())
+    assert isinstance(validated.checks.risk_engine, bool)
+    assert isinstance(validated.checks.database, bool)
+
+
+def test_native_degraded_health_preserves_the_legacy_response_shape(monkeypatch):
+    monkeypatch.setattr(legacy_app_module, "engine", None)
+
+    response = asgi_get("/health")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "degraded"}
 
 
 def test_migration_response_schemas_reject_undocumented_fields():

@@ -204,10 +204,13 @@ excluded. The contract exposes JSON Schema request/response shapes, roles,
 pagination, bearer authentication, and idempotency semantics, while existing
 runtime validation remains explicit and covered by integration tests.
 
-`backend/asgi.py` serves Swagger UI at `/api/v1/docs` and mounts the
-compatibility application through the maintained `a2wsgi` adapter. The service
-does not yet claim a completed FastAPI migration: no tenant route group has
-been rewritten yet. Replacing every route before it has typed contract coverage
+`backend/asgi.py` serves Swagger UI at `/api/v1/docs`, implements the typed
+`/health` and `/ready` operational routes with a safe `X-Request-ID`
+correlation header, and mounts the compatibility application through the
+maintained `a2wsgi` adapter. The native health route preserves the legacy
+response shape when the model is unavailable. The service does not yet claim a
+completed FastAPI migration: no authenticated tenant route group has been
+rewritten yet. Replacing every route before it has typed contract coverage
 would create a risky parallel API surface. The next backend migration increment
 must move route groups behind the published contract with compatibility tests;
 it must not silently weaken the current tenant/RBAC controls.
