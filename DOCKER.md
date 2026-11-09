@@ -20,7 +20,7 @@ This document provides instructions for building, running, and deploying the AI 
 docker-compose up --build
 
 # Application will be available at http://localhost:8000
-# Dashboard at http://localhost:8000/static/index.html
+# Serve ./frontend separately from an allowed browser origin for the dashboard.
 ```
 
 ### Using Docker CLI
@@ -32,7 +32,6 @@ docker build -t ai-risk-manager:latest .
 # Run the container
 docker run -p 8000:8000 \
   -e PYTHONUNBUFFERED=1 \
-  -e FLASK_ENV=production \
   --name ai-risk-manager \
   ai-risk-manager:latest
 
@@ -57,14 +56,17 @@ docker rm ai-risk-manager
 ### Environment Variables
 - `PYTHONUNBUFFERED=1`: Stream logs to stdout in real-time
 - `PYTHONDONTWRITEBYTECODE=1`: Don't create .pyc files
-- `FLASK_ENV=production`: Run in production mode
-- `FLASK_APP=backend.app`: Flask application entry point
+- `WEB_CONCURRENCY=1`: Uvicorn worker count (increase only with a shared
+  rate-limit strategy and capacity evidence)
+- `UVICORN_TIMEOUT_KEEP_ALIVE=5`: ASGI HTTP keep-alive timeout in seconds
 
 ## API Endpoints
 
 Once running, the following endpoints are available:
 
 - `GET /health` - Health check endpoint
+- `GET /ready` - Model-and-database readiness endpoint
+- `GET /api/v1/docs` - Swagger UI for the tenant API contract
 - `POST /api/risk/analyze` - Analyze single merchant-day
 - `GET /api/risk/merchants` - List merchants
 - `GET /api/risk/timeseries/<merchant_id>` - Historical data

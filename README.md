@@ -47,9 +47,9 @@ Optional LLM layer (rephrases verified signals only — never invents evidence)
 Merchant-facing explanation
 ```
 
-Backend: Flask REST API sitting directly on the trained sklearn model
-(see `backend/app.py` for why — no Node/Python IPC hop for a
-prototype this size). Frontend: a single-page dashboard
+Backend: an incremental FastAPI/ASGI gateway mounts the compatibility-tested
+Flask routes while typed endpoints migrate in small, contract-tested groups
+(see `backend/asgi.py`). Frontend: a single-page dashboard
 (`frontend/index.html`) that calls the API directly.
 
 ## How It Works
@@ -294,9 +294,8 @@ python evaluate.py
 cd ..
 pytest tests/ -v
 
-# 4. Start the backend API (port 8000)
-cd backend
-python app.py
+# 4. Start the ASGI API gateway (port 8000)
+uvicorn backend.asgi:app --host 127.0.0.1 --port 8000
 
 # 5. Serve the dashboard from an allowed local origin
 # In a second terminal at the repository root:
@@ -309,14 +308,14 @@ The API accepts browser requests only from the comma-separated origins in
 Set it explicitly when using another local frontend origin, for example:
 
 ```bash
-ALLOWED_ORIGINS=http://localhost:3000 python backend/app.py
+ALLOWED_ORIGINS=http://localhost:3000 uvicorn backend.asgi:app --host 127.0.0.1 --port 8000
 ```
 
 On PowerShell:
 
 ```powershell
 $env:ALLOWED_ORIGINS = "http://localhost:3000"
-python backend/app.py
+uvicorn backend.asgi:app --host 127.0.0.1 --port 8000
 ```
 
 **CORS is not authentication or authorization.** The authenticated `/api/v1`
@@ -389,7 +388,8 @@ latency baseline; it is not a production load or capacity claim.
 
 ```
 ai-risk-manager/
-├── backend/app.py              # Flask REST API + audit logging
+├── backend/asgi.py             # FastAPI gateway + mounted Flask compatibility API
+├── backend/app.py              # Flask compatibility API + audit logging
 ├── frontend/index.html         # Dashboard (single-page, no build step)
 ├── model/
 │   ├── generate_data.py        # synthetic data generator (documented)

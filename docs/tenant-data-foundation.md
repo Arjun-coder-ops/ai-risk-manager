@@ -48,10 +48,10 @@ For an externally managed database, set `DATABASE_URL` using the
 alembic upgrade head
 ```
 
-The container runs the existing Flask WSGI application with pinned Gunicorn,
-not Flask's development server. It executes migrations before booting only to
-keep local Compose reproducible; deployed environments should run migrations
-as a dedicated release operation.
+The container runs Uvicorn against the FastAPI/ASGI gateway, which mounts the
+existing Flask WSGI compatibility surface while route groups migrate. It
+executes migrations before booting only to keep local Compose reproducible;
+deployed environments should run migrations as a dedicated release operation.
 
 The bootstrap endpoint `POST /api/v1/auth/register` is disabled unless
 `ALLOW_BOOTSTRAP_REGISTRATION=true` is explicitly set. Use it only long enough
@@ -102,7 +102,7 @@ container instead of remaining below the default logger threshold.
 Authentication endpoints and state-changing `/api/v1` endpoints receive local
 fixed-window limits, configured by `AUTH_RATE_LIMIT_PER_MINUTE`,
 `WRITE_RATE_LIMIT_PER_MINUTE`, and `RATE_LIMIT_WINDOW_SECONDS`. These limits
-are in-process only: they do **not** coordinate Gunicorn workers or replicas.
+are in-process only: they do **not** coordinate Uvicorn workers or replicas.
 Before production horizontal scaling, enforce equivalent limits at a trusted
 API gateway or install a shared rate-limit store. Rate limiting is a
 defense-in-depth control, not authentication, authorization, tenant isolation,
@@ -194,7 +194,8 @@ bootstrap registration endpoint must not be publicly exposed.
 
 ## Phase 7 incremental productization boundary
 
-The current backend remains a Flask modular monolith while its durable API
+The current backend is an incremental FastAPI/ASGI gateway over the Flask
+modular monolith while its durable API
 contracts are stabilized. It has separate authentication, persistence,
 ingestion-worker, request-control, tenant API, and model/policy components.
 `GET /api/v1/openapi.json` publishes the source-controlled OpenAPI 3.1
@@ -203,11 +204,13 @@ excluded. The contract exposes JSON Schema request/response shapes, roles,
 pagination, bearer authentication, and idempotency semantics, while existing
 runtime validation remains explicit and covered by integration tests.
 
-The service does not yet claim a completed FastAPI migration. Replacing the
-framework before every authenticated route has typed contract coverage would
-create a risky parallel API surface. The next backend migration increment must
-move route groups behind the published contract with compatibility tests; it
-must not silently weaken the current tenant/RBAC controls.
+`backend/asgi.py` serves Swagger UI at `/api/v1/docs` and mounts the
+compatibility application through the maintained `a2wsgi` adapter. The service
+does not yet claim a completed FastAPI migration: no tenant route group has
+been rewritten yet. Replacing every route before it has typed contract coverage
+would create a risky parallel API surface. The next backend migration increment
+must move route groups behind the published contract with compatibility tests;
+it must not silently weaken the current tenant/RBAC controls.
 
 ## Reproducible local API baseline
 
@@ -216,7 +219,7 @@ Run `python evaluation/run_api_benchmark.py` to regenerate
 requests after 10 warmups against Flask's test client and a temporary SQLite
 database seeded with 50 merchants. It measures `/health`, the OpenAPI document,
 and authenticated `/api/v1/merchants?page=1&limit=50`; it is **not** a TCP,
-Gunicorn, PostgreSQL, concurrent-load, or production capacity benchmark. On
+Uvicorn, PostgreSQL, concurrent-load, or production capacity benchmark. On
 the recorded Windows/Python 3.10.8 run, the tenant list route measured 9.0631
 ms p50, 13.0810 ms p95, and 107.9842 sequential requests/sec. Re-run it on the
 target deployment stack before setting capacity or latency objectives.

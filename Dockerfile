@@ -42,6 +42,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Apply schema migrations before starting the application. Production delivery
 # should run this as a dedicated one-off release job; this command keeps local
-# Docker Compose startup reproducible. Gunicorn replaces Flask's development
-# server while retaining the existing Flask WSGI application.
-CMD ["sh", "-c", "alembic upgrade head && exec gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-1} --timeout ${GUNICORN_TIMEOUT:-60} --access-logfile - --error-logfile - backend.app:app"]
+# Docker Compose startup reproducible. Uvicorn hosts the FastAPI ASGI gateway,
+# which mounts the tested Flask routes while typed route groups migrate safely.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn backend.asgi:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-1} --timeout-keep-alive ${UVICORN_TIMEOUT_KEEP_ALIVE:-5}"]

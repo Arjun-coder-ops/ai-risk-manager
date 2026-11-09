@@ -24,8 +24,6 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-      - FLASK_APP=backend.app
-      - FLASK_ENV=production
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-ai_risk}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_risk}
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
