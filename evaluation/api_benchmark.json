@@ -1,0 +1,41 @@
+{
+  "benchmark_version": "phase7-api-inprocess-v1",
+  "execution_scope": "Flask test client with temporary SQLite; no TCP, Gunicorn, PostgreSQL, concurrent clients, or network latency.",
+  "requests_per_endpoint": 100,
+  "warmup_requests_per_endpoint": 10,
+  "seeded_merchants": 50,
+  "python_version": "3.10.8",
+  "platform": "Windows-10-10.0.26300-SP0",
+  "endpoints": {
+    "liveness_health": {
+      "requests": 100,
+      "latency_ms": {
+        "min": 0.4058,
+        "p50": 0.6793,
+        "p95": 1.309,
+        "max": 2.1549
+      },
+      "sequential_throughput_requests_per_second": 1325.2511
+    },
+    "openapi_contract": {
+      "requests": 100,
+      "latency_ms": {
+        "min": 1.0585,
+        "p50": 1.6854,
+        "p95": 2.2428,
+        "max": 4.6061
+      },
+      "sequential_throughput_requests_per_second": 590.0422
+    },
+    "tenant_merchants_page": {
+      "requests": 100,
+      "latency_ms": {
+        "min": 5.5498,
+        "p50": 9.0631,
+        "p95": 13.081,
+        "max": 14.6423
+      },
+      "sequential_throughput_requests_per_second": 107.9842
+    }
+  }
+}

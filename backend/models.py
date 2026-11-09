@@ -53,7 +53,7 @@ class Membership(Base):
     __tablename__ = "memberships"
     __table_args__ = (
         UniqueConstraint("organization_id", "user_id", name="uq_membership_organization_user"),
-        CheckConstraint("role IN ('admin', 'analyst', 'viewer')", name="ck_membership_role"),
+        CheckConstraint("role IN ('admin', 'analyst', 'investigator', 'viewer')", name="ck_membership_role"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

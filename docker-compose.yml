@@ -32,6 +32,10 @@ services:
       - ALLOW_BOOTSTRAP_REGISTRATION=${ALLOW_BOOTSTRAP_REGISTRATION:-false}
       - MAX_CSV_INGESTION_ROWS=${MAX_CSV_INGESTION_ROWS:-1000}
       - MAX_TRANSACTION_INGESTION_ROWS=${MAX_TRANSACTION_INGESTION_ROWS:-1000}
+      - AUTH_RATE_LIMIT_PER_MINUTE=${AUTH_RATE_LIMIT_PER_MINUTE:-30}
+      - WRITE_RATE_LIMIT_PER_MINUTE=${WRITE_RATE_LIMIT_PER_MINUTE:-120}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,7 +44,7 @@ services:
     healthcheck:
       # The runtime image intentionally does not ship curl. Use the Python
       # standard library, which is guaranteed to be present in this image.
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3

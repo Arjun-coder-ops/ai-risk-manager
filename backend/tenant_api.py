@@ -16,7 +16,7 @@ import re
 
 import pandas as pd
 from flask import Blueprint, current_app, g, jsonify, request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from backend.auth import issue_access_token, jwt_secret, require_auth
@@ -59,7 +59,7 @@ CASE_TRANSITIONS = {
 }
 AUTO_CASE_RISK_LEVELS = frozenset({"HIGH", "REVIEW"})
 FEEDBACK_LABELS = frozenset({"CONFIRMED_FRAUD", "FALSE_POSITIVE", "INCONCLUSIVE"})
-MEMBERSHIP_ROLES = frozenset({"admin", "analyst", "viewer"})
+MEMBERSHIP_ROLES = frozenset({"admin", "analyst", "investigator", "viewer"})
 MAX_REPORTED_INGESTION_ERRORS = 100
 
 
@@ -72,7 +72,32 @@ class CsvUploadError(ValueError):
 
 
 def api_error(reason: str, status: int):
-    return jsonify({"status": "error", "reason": reason}), status
+    payload = {"status": "error", "reason": reason}
+    request_id = getattr(g, "request_id", None)
+    if request_id:
+        payload["request_id"] = request_id
+    return jsonify(payload), status
+
+
+def pagination_parameters(*, default_limit: int = 50) -> tuple[int, int]:
+    """Parse compatible ``limit`` plus one-based ``page`` query controls."""
+    try:
+        limit = int(request.args.get("limit", default_limit))
+        page = int(request.args.get("page", 1))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("limit and page must be integers.") from exc
+    if page < 1:
+        raise ValueError("page must be at least 1.")
+    return page, min(max(limit, 1), 100)
+
+
+def pagination_payload(*, page: int, limit: int, total: int) -> dict:
+    return {
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "total_pages": (total + limit - 1) // limit if total else 0,
+    }
 
 
 def request_object():
@@ -965,13 +990,19 @@ def get_ingestion(batch_id: str):
 @tenant_api.route("/merchants", methods=["GET"])
 @require_auth()
 def list_merchants():
+    try:
+        page, limit = pagination_parameters()
+    except ValueError as exc:
+        return api_error(str(exc), 400)
+    conditions = (Merchant.organization_id == g.principal.organization_id,)
+    total = int(g.db.scalar(select(func.count()).select_from(Merchant).where(*conditions)) or 0)
     merchants = g.db.scalars(select(Merchant).where(
-        Merchant.organization_id == g.principal.organization_id
-    ).order_by(Merchant.external_id)).all()
+        *conditions
+    ).order_by(Merchant.external_id).offset((page - 1) * limit).limit(limit)).all()
     return jsonify({"merchants": [
         {"id": merchant.id, "merchant_id": merchant.external_id, "display_name": merchant.display_name}
         for merchant in merchants
-    ]})
+    ], "pagination": pagination_payload(page=page, limit=limit, total=total)})
 
 
 @tenant_api.route("/risk-assessments", methods=["POST"])
@@ -1128,7 +1159,7 @@ def get_risk_assessment(assessment_id: str):
 
 
 @tenant_api.route("/risk-assessments/<assessment_id>/feedback", methods=["POST"])
-@require_auth({"admin", "analyst"})
+@require_auth({"admin", "analyst", "investigator"})
 def submit_feedback(assessment_id: str):
     """Record a human outcome without changing a production model decision."""
     body, error = request_object()
@@ -1201,7 +1232,7 @@ def submit_feedback(assessment_id: str):
 
 
 @tenant_api.route("/risk-assessments/<assessment_id>/feedback", methods=["GET"])
-@require_auth({"admin", "analyst"})
+@require_auth()
 def list_feedback(assessment_id: str):
     if assessment_context(g.db, assessment_id, g.principal.organization_id) is None:
         return api_error("Risk assessment was not found.", 404)
@@ -1267,25 +1298,33 @@ def list_cases():
         if requested_status not in CASE_STATUSES:
             return api_error("status must be a valid case status.", 400)
     try:
-        limit = min(max(int(request.args.get("limit", 50)), 1), 100)
-    except ValueError:
-        return api_error("limit must be an integer between 1 and 100.", 400)
+        page, limit = pagination_parameters()
+    except ValueError as exc:
+        return api_error(str(exc), 400)
+    case_conditions = [InvestigationCase.organization_id == g.principal.organization_id]
+    if requested_status:
+        case_conditions.append(InvestigationCase.status == requested_status)
+    total = int(g.db.scalar(
+        select(func.count()).select_from(InvestigationCase).where(*case_conditions)
+    ) or 0)
     query = (
         select(InvestigationCase, Merchant, RiskAssessment)
         .join(Merchant, Merchant.id == InvestigationCase.merchant_id)
         .join(RiskAssessment, RiskAssessment.id == InvestigationCase.risk_assessment_id)
         .where(
-            InvestigationCase.organization_id == g.principal.organization_id,
+            *case_conditions,
             Merchant.organization_id == g.principal.organization_id,
             RiskAssessment.organization_id == g.principal.organization_id,
         )
         .order_by(InvestigationCase.created_at.desc())
+        .offset((page - 1) * limit)
         .limit(limit)
     )
-    if requested_status:
-        query = query.where(InvestigationCase.status == requested_status)
     contexts = g.db.execute(query).all()
-    return jsonify({"cases": [serialize_case(case, merchant, assessment) for case, merchant, assessment in contexts]})
+    return jsonify({
+        "cases": [serialize_case(case, merchant, assessment) for case, merchant, assessment in contexts],
+        "pagination": pagination_payload(page=page, limit=limit, total=total),
+    })
 
 
 @tenant_api.route("/cases/<case_id>", methods=["GET"])
@@ -1317,7 +1356,7 @@ def list_case_events(case_id: str):
 
 
 @tenant_api.route("/cases/<case_id>/assignment", methods=["POST"])
-@require_auth({"admin", "analyst"})
+@require_auth({"admin", "analyst", "investigator"})
 def assign_case(case_id: str):
     body, error = request_object()
     if error:
@@ -1332,7 +1371,7 @@ def assign_case(case_id: str):
         return api_error("Investigation case was not found.", 404)
     case, merchant, assessment = context
     if g.principal.role != "admin" and assigned_user_id not in (None, g.principal.user_id):
-        return api_error("Analysts may only assign a case to themselves or unassign it.", 403)
+        return api_error("Non-admin investigators may only assign a case to themselves or unassign it.", 403)
     if assigned_user_id is not None:
         assignee = g.db.scalar(select(Membership).where(
             Membership.organization_id == g.principal.organization_id,
@@ -1361,7 +1400,7 @@ def assign_case(case_id: str):
 
 
 @tenant_api.route("/cases/<case_id>/transitions", methods=["POST"])
-@require_auth({"admin", "analyst"})
+@require_auth({"admin", "analyst", "investigator"})
 def transition_case(case_id: str):
     body, error = request_object()
     if error:
@@ -1422,16 +1461,18 @@ def transition_case(case_id: str):
 
 
 @tenant_api.route("/audit-events", methods=["GET"])
-@require_auth({"admin", "analyst"})
+@require_auth()
 def list_audit_events():
     try:
-        limit = min(max(int(request.args.get("limit", 50)), 1), 100)
-    except ValueError:
-        return api_error("limit must be an integer between 1 and 100.", 400)
+        page, limit = pagination_parameters()
+    except ValueError as exc:
+        return api_error(str(exc), 400)
+    conditions = (AuditEvent.organization_id == g.principal.organization_id,)
+    total = int(g.db.scalar(select(func.count()).select_from(AuditEvent).where(*conditions)) or 0)
     events = g.db.scalars(select(AuditEvent).where(
-        AuditEvent.organization_id == g.principal.organization_id
-    ).order_by(AuditEvent.created_at.desc()).limit(limit)).all()
+        *conditions
+    ).order_by(AuditEvent.created_at.desc()).offset((page - 1) * limit).limit(limit)).all()
     return jsonify({"events": [{
         "id": event.id, "action": event.action, "entity_type": event.entity_type,
         "entity_id": event.entity_id, "payload": event.payload, "created_at": event.created_at.isoformat(),
-    } for event in events]})
+    } for event in events], "pagination": pagination_payload(page=page, limit=limit, total=total)})

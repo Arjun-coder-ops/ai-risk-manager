@@ -27,13 +27,18 @@ from model.validation import REQUIRED_INPUT_FIELDS  # noqa: E402
 def client(tmp_path):
     configure_database(f"sqlite:///{(tmp_path / 'tenant-api.db').as_posix()}")
     create_schema()
+    config_keys = ("TESTING", "JWT_SECRET", "ALLOW_BOOTSTRAP_REGISTRATION")
+    previous_config = {key: application.app.config.get(key) for key in config_keys}
     application.app.config.update(
         TESTING=True,
         JWT_SECRET="test-secret-that-is-longer-than-thirty-two-characters",
         ALLOW_BOOTSTRAP_REGISTRATION=True,
     )
+    application.app.extensions["rate_limiter"].clear()
     with application.app.test_client() as test_client:
         yield test_client
+    application.app.extensions["rate_limiter"].clear()
+    application.app.config.update(previous_config)
     configure_database()
 
 
@@ -570,6 +575,37 @@ class TestTenantRiskAssessmentAndCases:
         other_token = register(client, "score-other")["access_token"]
         assert client.get(f"/api/v1/risk-assessments/{assessment['id']}", headers=auth_headers(other_token)).status_code == 404
         assert client.get(f"/api/v1/cases/{assessment['case_id']}", headers=auth_headers(other_token)).status_code == 404
+
+    def test_investigator_can_work_cases_but_viewer_cannot_mutate_them(self, client, monkeypatch):
+        admin_token, assessment = self._create_case(client, monkeypatch, "investigator")
+        organization_id = client.get("/api/v1/auth/me", headers=auth_headers(admin_token)).get_json()["organization_id"]
+        investigator_token = create_member_token(organization_id, "investigator@example.test", "investigator")
+        viewer_token = create_member_token(organization_id, "viewer@example.test", "viewer")
+        investigator = client.get("/api/v1/auth/me", headers=auth_headers(investigator_token)).get_json()
+
+        listing = client.get("/api/v1/cases?page=1&limit=1", headers=auth_headers(investigator_token))
+        assert listing.status_code == 200
+        assert listing.get_json()["pagination"] == {"page": 1, "limit": 1, "total": 1, "total_pages": 1}
+        assert client.get("/api/v1/cases?page=0", headers=auth_headers(investigator_token)).status_code == 400
+
+        assignment = client.post(
+            f"/api/v1/cases/{assessment['case_id']}/assignment",
+            json={"assigned_user_id": investigator["user_id"]},
+            headers=auth_headers(investigator_token),
+        )
+        assert assignment.status_code == 200
+        transitioned = client.post(
+            f"/api/v1/cases/{assessment['case_id']}/transitions",
+            json={"status": "IN_REVIEW", "note": "Investigator review started."},
+            headers=auth_headers(investigator_token),
+        )
+        assert transitioned.status_code == 200
+        forbidden = client.post(
+            f"/api/v1/cases/{assessment['case_id']}/transitions",
+            json={"status": "ESCALATED", "note": "viewer cannot mutate"},
+            headers=auth_headers(viewer_token),
+        )
+        assert forbidden.status_code == 403
 
     def test_case_assignment_transitions_and_event_history(self, client, monkeypatch):
         token, assessment = self._create_case(client, monkeypatch, "workflow")

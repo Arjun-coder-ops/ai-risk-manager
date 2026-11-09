@@ -35,9 +35,10 @@ ENV PATH=/root/.local/bin:$PATH \
 # Copy application code
 COPY . .
 
-# Health check
+# Readiness verifies both the loaded inference artifact and database
+# connectivity; liveness remains available at /health for process checks.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"
 
 # Apply schema migrations before starting the application. Production delivery
 # should run this as a dedicated one-off release job; this command keeps local

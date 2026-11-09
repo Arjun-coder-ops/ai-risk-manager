@@ -351,6 +351,13 @@ processing—not a real-time streaming claim. See
 [`docs/tenant-data-foundation.md`](docs/tenant-data-foundation.md) for the
 strict request contract, state model, and operational limits.
 
+The versioned, machine-readable tenant contract is available from a running
+service at `GET /api/v1/openapi.json`. It intentionally excludes the legacy
+synthetic demo endpoints. Each response carries `X-Request-ID`; `/ready`
+checks both the inference artifact and database for container readiness.
+Run `python evaluation/run_api_benchmark.py` for the clearly scoped local API
+latency baseline; it is not a production load or capacity claim.
+
 ## Limitations
 
 - Data is synthetic; real-world merchant behaviour is messier and this

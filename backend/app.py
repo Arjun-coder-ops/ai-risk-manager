@@ -24,13 +24,15 @@ Endpoints:
 import json
 import os
 import sys
+import time
 import uuid
 from datetime import datetime, timezone
 
-from flask import Flask, request, jsonify
+from flask import Flask, g, request, jsonify
 from flask_cors import CORS
 import pandas as pd
-from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
+from sqlalchemy import text
+from werkzeug.exceptions import BadRequest, MethodNotAllowed, NotFound, RequestEntityTooLarge
 from sqlalchemy.exc import SQLAlchemyError
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "model"))
@@ -42,6 +44,9 @@ from validation import (  # noqa: E402
     validate_request_identifiers,
 )
 from backend.tenant_api import tenant_api
+from backend.database import get_engine
+from backend.api_contract import openapi_document
+from backend.request_controls import FixedWindowRateLimiter, request_id_from_header
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, "data", "raw", "merchant_daily_transactions.csv")
@@ -61,6 +66,12 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_REQUEST_BYTES", "65536"))
 app.config["MAX_CSV_INGESTION_ROWS"] = int(os.environ.get("MAX_CSV_INGESTION_ROWS", "1000"))
 app.config["MAX_TRANSACTION_INGESTION_ROWS"] = int(os.environ.get("MAX_TRANSACTION_INGESTION_ROWS", "1000"))
+app.config["AUTH_RATE_LIMIT_PER_MINUTE"] = int(os.environ.get("AUTH_RATE_LIMIT_PER_MINUTE", "30"))
+app.config["WRITE_RATE_LIMIT_PER_MINUTE"] = int(os.environ.get("WRITE_RATE_LIMIT_PER_MINUTE", "120"))
+app.config["RATE_LIMIT_WINDOW_SECONDS"] = int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60"))
+app.config["LOG_LEVEL"] = os.environ.get("LOG_LEVEL", "INFO").upper()
+app.extensions["rate_limiter"] = FixedWindowRateLimiter()
+app.logger.setLevel(app.config["LOG_LEVEL"])
 
 # CORS controls which browser origins may read a response; it is not an
 # authentication or authorization mechanism.  This prototype serves only
@@ -106,6 +117,73 @@ _raw_cache = None
 _featured_cache = None
 
 
+def _error_payload(reason: str) -> dict:
+    payload = {"status": "error", "reason": reason}
+    request_id = getattr(g, "request_id", None)
+    if request_id:
+        payload["request_id"] = request_id
+    return payload
+
+
+@app.before_request
+def begin_request():
+    """Attach a safe correlation ID and bound abusive authenticated writes."""
+    g.request_id = request_id_from_header(request.headers.get("X-Request-ID"))
+    g.request_started_at = time.perf_counter()
+    if request.method == "OPTIONS" or not request.path.startswith("/api/v1/"):
+        return None
+    if request.path.startswith("/api/v1/auth/"):
+        limit = app.config["AUTH_RATE_LIMIT_PER_MINUTE"]
+        scope = "auth"
+    elif request.method in {"POST", "PATCH", "PUT", "DELETE"}:
+        limit = app.config["WRITE_RATE_LIMIT_PER_MINUTE"]
+        scope = "write"
+    else:
+        return None
+    limiter = app.extensions["rate_limiter"]
+    client = request.remote_addr or "unknown"
+    decision = limiter.check(
+        f"{scope}:{client}",
+        limit=limit,
+        window_seconds=app.config["RATE_LIMIT_WINDOW_SECONDS"],
+    )
+    g.rate_limit = decision
+    if not decision.allowed:
+        response = jsonify(_error_payload("Rate limit exceeded. Retry later."))
+        response.status_code = 429
+        response.headers["Retry-After"] = str(decision.retry_after_seconds)
+        return response
+    return None
+
+
+@app.after_request
+def complete_request(response):
+    """Return correlation/rate-limit headers and emit a body-free JSON log."""
+    request_id = getattr(g, "request_id", None)
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+        if response.status_code >= 400 and response.is_json:
+            payload = response.get_json(silent=True)
+            if isinstance(payload, dict) and "request_id" not in payload:
+                payload["request_id"] = request_id
+                response.set_data(app.json.dumps(payload))
+    decision = getattr(g, "rate_limit", None)
+    if decision is not None:
+        response.headers["X-RateLimit-Limit"] = str(decision.limit)
+        response.headers["X-RateLimit-Remaining"] = str(decision.remaining)
+    started = getattr(g, "request_started_at", None)
+    duration_ms = round((time.perf_counter() - started) * 1000, 3) if started is not None else None
+    app.logger.info(json.dumps({
+        "event": "http_request_completed",
+        "request_id": request_id,
+        "method": request.method,
+        "path": request.path,
+        "status_code": response.status_code,
+        "duration_ms": duration_ms,
+    }, separators=(",", ":")))
+    return response
+
+
 def get_raw_data() -> pd.DataFrame:
     global _raw_cache
     if _raw_cache is None:
@@ -128,17 +206,31 @@ def write_audit_record(record: dict):
 
 @app.errorhandler(BadRequest)
 def handle_bad_request(_: BadRequest):
-    return jsonify({"status": "error", "reason": "Malformed request."}), 400
+    return jsonify(_error_payload("Malformed request.")), 400
 
 
 @app.errorhandler(RequestEntityTooLarge)
 def handle_request_too_large(_: RequestEntityTooLarge):
-    return jsonify({"status": "error", "reason": "Request body exceeds the allowed size."}), 413
+    return jsonify(_error_payload("Request body exceeds the allowed size.")), 413
+
+
+@app.errorhandler(NotFound)
+def handle_not_found(error: NotFound):
+    if request.path.startswith("/api/"):
+        return jsonify(_error_payload("API endpoint was not found.")), 404
+    return error
+
+
+@app.errorhandler(MethodNotAllowed)
+def handle_method_not_allowed(error: MethodNotAllowed):
+    if request.path.startswith("/api/"):
+        return jsonify(_error_payload("HTTP method is not allowed for this endpoint.")), 405
+    return error
 
 
 @app.errorhandler(SQLAlchemyError)
 def handle_database_error(_: SQLAlchemyError):
-    return jsonify({"status": "error", "reason": "A database operation could not be completed."}), 503
+    return jsonify(_error_payload("A database operation could not be completed.")), 503
 
 
 @app.route("/health", methods=["GET"])
@@ -146,6 +238,27 @@ def health():
     if engine is None:
         return jsonify({"status": "degraded"}), 503
     return jsonify({"status": "ok", "model_version": engine.model_version})
+
+
+@app.route("/ready", methods=["GET"])
+def ready():
+    """Readiness requires both a loaded inference artifact and a reachable DB."""
+    checks = {"risk_engine": engine is not None, "database": False}
+    try:
+        with get_engine().connect() as connection:
+            connection.execute(text("SELECT 1"))
+        checks["database"] = True
+    except SQLAlchemyError:
+        pass
+    if all(checks.values()):
+        return jsonify({"status": "ready", "checks": checks})
+    return jsonify({"status": "not_ready", "checks": checks}), 503
+
+
+@app.route("/api/v1/openapi.json", methods=["GET"])
+def tenant_openapi():
+    """Publish the source-controlled contract for authenticated tenant routes."""
+    return jsonify(openapi_document())
 
 
 @app.route("/api/risk/analyze", methods=["POST"])
@@ -171,7 +284,7 @@ def analyze():
 
     result = engine.score_merchant_day(raw, date, merchant_id)
     result_dict = result.to_dict()
-    result_dict["request_id"] = str(uuid.uuid4())
+    result_dict["request_id"] = getattr(g, "request_id", str(uuid.uuid4()))
     result_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
 
     write_audit_record({
