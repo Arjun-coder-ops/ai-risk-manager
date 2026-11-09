@@ -55,7 +55,12 @@ def jwt_secret(*, configured_secret: str | None = None) -> str:
     return secret
 
 
-def issue_access_token(user: User, membership: Membership) -> str:
+def issue_access_token(
+    user: User,
+    membership: Membership,
+    *,
+    configured_secret: str | None = None,
+) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": user.id,
@@ -65,7 +70,7 @@ def issue_access_token(user: User, membership: Membership) -> str:
         "iat": now,
         "exp": now + timedelta(minutes=60),
     }
-    return jwt.encode(payload, jwt_secret(), algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, jwt_secret(configured_secret=configured_secret), algorithm=JWT_ALGORITHM)
 
 
 def _unauthorized(reason: str):

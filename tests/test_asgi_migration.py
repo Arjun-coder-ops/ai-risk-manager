@@ -13,14 +13,20 @@ from backend.asgi import app, legacy_app_module
 from backend.auth import issue_access_token
 from backend.database import configure_database, create_schema, get_session
 from backend.models import Membership, Organization, User
-from backend.schemas import ErrorResponse, HealthResponse, PrincipalResponse, ReadinessChecks, ReadinessResponse
+from backend.schemas import ErrorResponse, HealthResponse, PrincipalResponse, ReadinessChecks, ReadinessResponse, TokenResponse
 
 
-def asgi_request(path: str, *, method: str = "GET", headers: dict[str, str] | None = None) -> httpx.Response:
+def asgi_request(
+    path: str,
+    *,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    json: dict | None = None,
+) -> httpx.Response:
     async def request() -> httpx.Response:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            return await client.request(method, path, headers=headers)
+            return await client.request(method, path, headers=headers, json=json)
 
     return asyncio.run(request())
 
@@ -33,12 +39,13 @@ def asgi_get(path: str, *, headers: dict[str, str] | None = None) -> httpx.Respo
 def native_principal(tmp_path):
     configure_database(f"sqlite:///{(tmp_path / 'native-auth.db').as_posix()}")
     create_schema()
-    config_keys = ("JWT_SECRET", "AUTH_RATE_LIMIT_PER_MINUTE", "RATE_LIMIT_WINDOW_SECONDS")
+    config_keys = ("JWT_SECRET", "AUTH_RATE_LIMIT_PER_MINUTE", "RATE_LIMIT_WINDOW_SECONDS", "ALLOW_BOOTSTRAP_REGISTRATION")
     previous_config = {key: legacy_app_module.app.config.get(key) for key in config_keys}
     legacy_app_module.app.config.update(
         JWT_SECRET="native-asgi-test-secret-that-is-longer-than-thirty-two-characters",
         AUTH_RATE_LIMIT_PER_MINUTE=30,
         RATE_LIMIT_WINDOW_SECONDS=60,
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
     )
     legacy_app_module.app.extensions["rate_limiter"].clear()
     session = get_session()
@@ -119,6 +126,40 @@ def test_native_auth_me_revalidates_membership_and_uses_the_error_envelope(nativ
     revoked = asgi_get("/api/v1/auth/me", headers={"Authorization": f"Bearer {native_principal['token']}"})
     assert revoked.status_code == 401
     assert ErrorResponse.model_validate(revoked.json()).reason == "Access token no longer has an active membership."
+
+
+def test_native_registration_and_login_use_strict_typed_contracts(native_principal):
+    payload = {
+        "email": "new-admin@example.test",
+        "password": "a-long-native-test-password",
+        "organization_name": "New Native Organization",
+        "organization_slug": "new-native-org",
+    }
+    created = asgi_request("/api/v1/auth/register", method="POST", json=payload)
+    assert created.status_code == 201
+    created_token = TokenResponse.model_validate(created.json())
+    assert created_token.token_type == "Bearer"
+    assert created_token.user.role == "admin"
+
+    logged_in = asgi_request(
+        "/api/v1/auth/login",
+        method="POST",
+        json={
+            "email": payload["email"],
+            "password": payload["password"],
+            "organization_slug": payload["organization_slug"],
+        },
+    )
+    assert logged_in.status_code == 200
+    assert TokenResponse.model_validate(logged_in.json()).organization.slug == payload["organization_slug"]
+
+    malformed = asgi_request(
+        "/api/v1/auth/login",
+        method="POST",
+        json={"email": payload["email"], "password": payload["password"], "organization_slug": payload["organization_slug"], "extra": "no"},
+    )
+    assert malformed.status_code == 422
+    assert ErrorResponse.model_validate(malformed.json()).reason == "Request validation failed."
 
 
 def test_native_auth_cors_preflight_remains_allowlisted():

@@ -17,9 +17,8 @@ import re
 import pandas as pd
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import func, select
-from werkzeug.security import check_password_hash, generate_password_hash
 
-from backend.auth import issue_access_token, jwt_secret, require_auth
+from backend.auth import require_auth
 from backend.database import get_session
 from backend.models import (
     AnalystFeedback,
@@ -37,6 +36,7 @@ from backend.models import (
     User,
 )
 from backend.transaction_validation import TransactionValidationError, validate_transactions
+from backend.tenant_auth import EMAIL_PATTERN, TenantAuthError, login as tenant_login, register_bootstrap
 from model.validation import (
     ObservationValidationError,
     REQUIRED_INPUT_FIELDS,
@@ -46,8 +46,6 @@ from model.validation import (
 
 
 tenant_api = Blueprint("tenant_api", __name__, url_prefix="/api/v1")
-EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-ORG_SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 IDEMPOTENCY_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 CASE_STATUSES = frozenset({"OPEN", "IN_REVIEW", "ESCALATED", "RESOLVED", "FALSE_POSITIVE"})
 CASE_TRANSITIONS = {
@@ -369,61 +367,18 @@ def register():
     This is a development bootstrap route. Production provisioning should move
     behind an invitation or SSO workflow before public deployment.
     """
-    if not current_app.config.get("ALLOW_BOOTSTRAP_REGISTRATION", False):
-        return api_error("Bootstrap registration is disabled.", 404)
     body, error = request_object()
     if error:
         return error
     try:
-        jwt_secret()
-    except RuntimeError:
-        return api_error("Authentication is not configured.", 503)
-    email = str(body.get("email", "")).strip().lower()
-    password = body.get("password")
-    organization_name = str(body.get("organization_name", "")).strip()
-    organization_slug = str(body.get("organization_slug", "")).strip().lower()
-    if not EMAIL_PATTERN.fullmatch(email):
-        return api_error("email must be a valid address.", 422)
-    if not isinstance(password, str) or len(password) < 12:
-        return api_error("password must contain at least 12 characters.", 422)
-    if not organization_name or len(organization_name) > 160:
-        return api_error("organization_name must be between 1 and 160 characters.", 422)
-    if not ORG_SLUG_PATTERN.fullmatch(organization_slug):
-        return api_error("organization_slug must use lowercase letters, digits, and internal hyphens.", 422)
-
-    session = get_session()
-    try:
-        if session.scalar(select(User).where(User.email == email)) is not None:
-            return api_error("email is already registered.", 409)
-        if session.scalar(select(Organization).where(Organization.slug == organization_slug)) is not None:
-            return api_error("organization_slug is already registered.", 409)
-        organization = Organization(name=organization_name, slug=organization_slug)
-        user = User(email=email, password_hash=generate_password_hash(password))
-        session.add_all([organization, user])
-        session.flush()
-        membership = Membership(organization_id=organization.id, user_id=user.id, role="admin")
-        session.add(membership)
-        write_audit(
-            session,
-            organization_id=organization.id,
-            actor_user_id=user.id,
-            action="organization.bootstrap",
-            entity_type="organization",
-            entity_id=organization.id,
-            payload={"email": user.email},
+        token = register_bootstrap(
+            body,
+            bootstrap_enabled=current_app.config.get("ALLOW_BOOTSTRAP_REGISTRATION", False),
+            configured_secret=current_app.config.get("JWT_SECRET"),
         )
-        session.commit()
-        return jsonify({
-            "access_token": issue_access_token(user, membership),
-            "token_type": "Bearer",
-            "organization": {"id": organization.id, "slug": organization.slug, "name": organization.name},
-            "user": {"id": user.id, "email": user.email, "role": membership.role},
-        }), 201
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+    except TenantAuthError as exc:
+        return api_error(exc.reason, exc.status_code)
+    return jsonify(token.to_dict()), 201
 
 
 @tenant_api.route("/auth/login", methods=["POST"])
@@ -432,31 +387,13 @@ def login():
     if error:
         return error
     try:
-        jwt_secret()
-    except RuntimeError:
-        return api_error("Authentication is not configured.", 503)
-    email = str(body.get("email", "")).strip().lower()
-    password = body.get("password")
-    organization_slug = str(body.get("organization_slug", "")).strip().lower()
-    if not isinstance(password, str):
-        return api_error("Invalid email, password, or organization.", 401)
-    session = get_session()
-    try:
-        user = session.scalar(select(User).where(User.email == email))
-        organization = session.scalar(select(Organization).where(Organization.slug == organization_slug))
-        membership = None if user is None or organization is None else session.scalar(
-            select(Membership).where(Membership.user_id == user.id, Membership.organization_id == organization.id)
+        token = tenant_login(
+            body,
+            configured_secret=current_app.config.get("JWT_SECRET"),
         )
-        if user is None or membership is None or not user.is_active or not check_password_hash(user.password_hash, password):
-            return api_error("Invalid email, password, or organization.", 401)
-        return jsonify({
-            "access_token": issue_access_token(user, membership),
-            "token_type": "Bearer",
-            "user": {"id": user.id, "email": user.email, "role": membership.role},
-            "organization": {"id": organization.id, "slug": organization.slug, "name": organization.name},
-        })
-    finally:
-        session.close()
+    except TenantAuthError as exc:
+        return api_error(exc.reason, exc.status_code)
+    return jsonify(token.to_dict())
 
 
 @tenant_api.route("/auth/me", methods=["GET"])

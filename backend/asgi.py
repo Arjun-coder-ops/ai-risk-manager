@@ -21,12 +21,22 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.auth import AuthenticationError, Principal, authenticate_access_token
 from backend.request_controls import request_id_from_header
-from backend.schemas import ErrorResponse, HealthResponse, PrincipalResponse, ReadinessChecks, ReadinessResponse
+from backend.schemas import (
+    ErrorResponse,
+    HealthResponse,
+    LoginRequest,
+    PrincipalResponse,
+    ReadinessChecks,
+    ReadinessResponse,
+    RegistrationRequest,
+    TokenResponse,
+)
+from backend.tenant_auth import TenantAuthError, login as tenant_login, register_bootstrap
 
 
 legacy_app_module = importlib.import_module("backend.app")
 flask_app = legacy_app_module.app
-NATIVE_AUTH_PATHS = frozenset({"/api/v1/auth/me"})
+NATIVE_AUTH_PATHS = frozenset({"/api/v1/auth/login", "/api/v1/auth/me", "/api/v1/auth/register"})
 
 
 app = FastAPI(
@@ -142,6 +152,44 @@ def ready() -> ReadinessResponse | JSONResponse:
     if payload.status == "ready":
         return payload
     return JSONResponse(payload.model_dump(), status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+def raise_native_auth_error(error: TenantAuthError) -> None:
+    """Adapt framework-neutral tenant-auth errors to the native error handler."""
+    raise HTTPException(status_code=error.status_code, detail=error.reason)
+
+
+@app.post(
+    "/api/v1/auth/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+)
+def register(payload: RegistrationRequest) -> TokenResponse:
+    """Create a locally bootstrapped administrator when that escape hatch is enabled."""
+    try:
+        token = register_bootstrap(
+            payload.model_dump(),
+            bootstrap_enabled=flask_app.config.get("ALLOW_BOOTSTRAP_REGISTRATION", False),
+            configured_secret=flask_app.config.get("JWT_SECRET"),
+        )
+    except TenantAuthError as exc:
+        raise_native_auth_error(exc)
+    return TokenResponse.model_validate(token.to_dict())
+
+
+@app.post(
+    "/api/v1/auth/login",
+    response_model=TokenResponse,
+    responses={401: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+)
+def login(payload: LoginRequest) -> TokenResponse:
+    """Issue a short-lived token after a non-enumerating local credential check."""
+    try:
+        token = tenant_login(payload.model_dump(), configured_secret=flask_app.config.get("JWT_SECRET"))
+    except TenantAuthError as exc:
+        raise_native_auth_error(exc)
+    return TokenResponse.model_validate(token.to_dict())
 
 
 @app.get(

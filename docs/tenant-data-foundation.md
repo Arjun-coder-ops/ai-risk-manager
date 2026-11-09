@@ -208,18 +208,22 @@ runtime validation remains explicit and covered by integration tests.
 `/health` and `/ready` operational routes with a safe `X-Request-ID`
 correlation header, and mounts the compatibility application through the
 maintained `a2wsgi` adapter. The native health route preserves the legacy
-response shape when the model is unavailable. The first authenticated native
-route, `GET /api/v1/auth/me`, validates a signed bearer token *and* its current
-active membership before returning a strict principal schema. Its CORS policy
-uses only the same explicit `ALLOWED_ORIGINS` list as the compatibility API;
-native authentication requests retain the existing bounded process-local rate
-limit and controlled error envelope.
+response shape when the model is unavailable. The first native authentication
+group—`POST /api/v1/auth/register`, `POST /api/v1/auth/login`, and
+`GET /api/v1/auth/me`—uses strict Pydantic contracts and shared
+framework-neutral service logic. The principal route validates a signed bearer
+token *and* its current active membership before returning a strict principal
+schema. Its CORS policy uses only the same explicit `ALLOWED_ORIGINS` list as
+the compatibility API; native authentication requests retain the existing
+bounded process-local rate limit and controlled error envelope. Bootstrap
+registration remains a deliberately disabled-by-default local setup escape
+hatch, not public production onboarding.
 
-The service does not yet claim a completed FastAPI migration: registration,
-login, ingestion, scoring, case workflow, and audit route groups still run via
-the compatibility adapter. Replacing every route before it has typed contract
-coverage would create a risky parallel API surface. The next backend migration
-increment must move route groups behind the published contract with
+The service does not yet claim a completed FastAPI migration: ingestion,
+scoring, case workflow, membership management, and audit route groups still
+run via the compatibility adapter. Replacing every route before it has typed
+contract coverage would create a risky parallel API surface. The next backend
+migration increment must move route groups behind the published contract with
 compatibility tests; it must not silently weaken tenant/RBAC controls.
 
 ## Reproducible local API baseline
