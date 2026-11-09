@@ -38,4 +38,3 @@ class ReadinessChecks(StrictResponseModel):
 class ReadinessResponse(StrictResponseModel):
     status: Literal["ready", "not_ready"]
     checks: ReadinessChecks
-
