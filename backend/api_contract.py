@@ -1,9 +1,9 @@
 """Versioned, machine-readable contract for the authenticated tenant API.
 
-The application remains Flask while durable endpoint contracts are stabilized.
-Keeping this OpenAPI document in source control makes request/response shapes,
-authentication and pagination independently reviewable without claiming that
-Flask route functions have already been migrated to FastAPI/Pydantic.
+The compatibility application remains Flask while durable endpoint contracts
+are stabilized and selected route groups move to FastAPI. Keeping this OpenAPI
+document in source control makes request/response shapes, authentication and
+pagination independently reviewable throughout that incremental migration.
 """
 
 from __future__ import annotations

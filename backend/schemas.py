@@ -25,6 +25,12 @@ class ErrorResponse(StrictResponseModel):
     request_id: str = Field(min_length=8, max_length=128)
 
 
+class PrincipalResponse(StrictResponseModel):
+    user_id: str = Field(min_length=1)
+    organization_id: str = Field(min_length=1)
+    role: Literal["admin", "analyst", "investigator", "viewer"]
+
+
 class HealthResponse(StrictResponseModel):
     status: Literal["ok", "degraded"]
     model_version: str | None = None
